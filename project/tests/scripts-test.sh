@@ -384,6 +384,92 @@ else
     echo "skipped: no infection-diff.sh in the examples/extra/ of the template (STACK_TEMPLATE_DIR, or TEMPLATE_REL of stack.conf)"
 fi
 
+echo "--- examples/extra/bench.sh"
+if [ -f "$WORK/docker/extra/bench.sh" ]; then
+    BEN=extra/bench.sh
+    CURLDIR="$WORK/curl-times"
+    mk_curl_times() { # mk_curl_times [<timing header>]: the answers of the fake curl: calls 1-10 are the warm-up (9.999 s, which must not count),
+                      # calls 11-20 the timed ones: nine of 0.010 s and, for the 5th of them (call 15), 0.100 s; with a header, each answer has it (4.00 ms)
+        local k t
+        rm -rf "$CURLDIR"; mkdir -p "$CURLDIR"
+        for k in 1 2 3 4 5 6 7 8 9 10; do printf '%s' "9.999" > "$CURLDIR/$k"; done
+        for k in 11 12 13 14 15 16 17 18 19 20; do
+            t="0.010"; [ "$k" -ne 15 ] || t="0.100"
+            if [ -n "${1:-}" ]; then printf 'HTTP/1.1 200 OK\r\nServer: x\r\n%s: 4.00\r\n\r\n%s' "$1" "$t" > "$CURLDIR/$k"; else printf '%s' "$t" > "$CURLDIR/$k"; fi
+        done
+    }
+    refused "no argument"                                    "$BEN"
+    refused "a path without a leading /"                     "$BEN" admin
+    refused "a path with a space"                            "$BEN" '/a b'
+    refused "a path with a command"                          "$BEN" '/a$(id)'
+    refused "a path with a semicolon"                        "$BEN" '/a;id'
+    refused "a path with a backtick"                         "$BEN" '/a`id`'
+    refused "a path with a backslash"                        "$BEN" '/a\b'
+    refused "a path with a quote"                            "$BEN" "/a'b"
+    refused "a path with a newline"                          "$BEN" "$(printf '/a\nb')"
+    refused "a number of requests in exponent form"          "$BEN" /x 1e3
+    refused "0 requests"                                     "$BEN" /x 0
+    refused "10000 requests"                                 "$BEN" /x 10000
+    refused "a negative number of requests"                  "$BEN" /x -5
+    refused "an empty number of requests"                    "$BEN" /x ''
+    refused "a timing header with a colon"                   "$BEN" /x 10 'X-A:b'
+    refused "a timing header with a space"                   "$BEN" /x 10 'X A'
+    refused "a timing header with a command"                 "$BEN" /x 10 'X-A;id'
+    refused "a timing header with an underscore"             "$BEN" /x 10 X_Timing
+    refused "four arguments"                                 "$BEN" /x 10 X-A extra
+
+    rm -rf "$WORK/.tmp/bench"; mk_curl_times ""
+    STACK_TEST_CURL_DIR="$CURLDIR" sh_run "$BEN" '/admin/login?x=1&y=2' 10
+    if [ "$STATUS" -eq 0 ] && [ "$(grep -c '^curl ' "$CALLS" | tr -d ' ')" -eq 20 ] && [ "$(wc -l < "$CALLS" | tr -d ' ')" -eq 20 ] \
+        && [ "$(sed -n 1p "$CALLS")" = "curl [-s] [-o] [/dev/null] [-w] [%{time_total}] [--max-time] [30] [$APP_URL/admin/login?x=1&y=2]" ] && ! called "[-D]"; then
+        good "bench.sh: ten warm-up and ten timed requests, each a GET of APP_URL + the path with no other option"
+    else
+        bad "bench.sh: the curl calls are not as expected (status $STATUS): $(cat "$WORK/out") / $(head -n 3 "$CALLS")"
+    fi
+    if grep -Eq '^total +10\.00 +100\.00 +100\.00$' "$WORK/out"; then
+        good "bench.sh: nine times of 10 ms and one of 100 ms give p50 = 10.00 and p99 = 100.00 (the warm-up is not counted)"
+    else
+        bad "bench.sh: the percentiles are wrong: $(cat "$WORK/out")"
+    fi
+    report="$(ls "$WORK/.tmp/bench"/*.txt 2>/dev/null | head -n 1)"
+    if [ -n "$report" ] && grep -Eq '^total +10\.00 +100\.00 +100\.00$' "$report" && grep -q "^bench: GET $APP_URL/admin/login" "$report" && [ -z "$(ls "$WORK/.tmp/bench"/*.raw 2>/dev/null)" ]; then
+        good "bench.sh: the report is kept in .tmp/bench/<date>-<time>.txt and the raw answers are removed"
+    else
+        bad "bench.sh: no report in .tmp/bench/ (or a raw file was left): $(ls "$WORK/.tmp/bench" 2>&1)"
+    fi
+
+    mk_curl_times X-Timing
+    STACK_TEST_CURL_DIR="$CURLDIR" sh_run "$BEN" /api/ping 10 X-Timing
+    if [ "$STATUS" -eq 0 ] && called "[-s] [-o] [/dev/null] [-D] [-] [-w] [%{time_total}]" \
+        && grep -Eq '^total +10\.00 +100\.00 +100\.00$' "$WORK/out" && grep -Eq '^X-Timing +4\.00 +4\.00 +4\.00$' "$WORK/out" \
+        && grep -Eq '^total - X-Timing +6\.00 +96\.00 +96\.00$' "$WORK/out"; then
+        good "bench.sh: with a timing header it reports the header (4.00 ms) and the difference (6.00 ms, 96.00 ms for the slow one)"
+    else
+        bad "bench.sh: the timing header was not read (status $STATUS): $(cat "$WORK/out")"
+    fi
+    mk_curl_times X-Other
+    STACK_TEST_CURL_DIR="$CURLDIR" sh_run "$BEN" /api/ping 10 X-Timing
+    if [ "$STATUS" -eq 1 ] && grep -q 'no response carried this header' "$WORK/out"; then good "bench.sh: a header that no response carries is an error (1)"; else bad "bench.sh: a missing header was not an error (status $STATUS): $(cat "$WORK/out")"; fi
+
+    mk_curl_times ""
+    STACK_TEST_CURL_STATUS=7 STACK_TEST_CURL_DIR="$CURLDIR" sh_run "$BEN" /x 10
+    if [ "$STATUS" -ne 0 ] && [ "$(grep -c '^curl ' "$CALLS" | tr -d ' ')" -eq 1 ] && grep -q 'warm-up request failed (curl exit 7)' "$WORK/out"; then
+        good "bench.sh: a curl that fails stops the script at once, naming the exit status"
+    else
+        bad "bench.sh: a failing curl was not reported (status $STATUS): $(cat "$WORK/out")"
+    fi
+    STACK_TEST_CURL_OUT=0.005 sh_run "$BEN" /
+    if [ "$STATUS" -eq 0 ] && [ "$(grep -c '^curl ' "$CALLS" | tr -d ' ')" -eq 110 ] && grep -Eq '^requests: 100 timed, after 10 warm-up' "$WORK/out" && grep -Eq '^total +5\.00 +5\.00 +5\.00$' "$WORK/out"; then
+        good "bench.sh: without a number it times 100 requests after 10 warm-up requests"
+    else
+        bad "bench.sh: the default of 100 requests was not used (status $STATUS): $(head -n 5 "$WORK/out")"
+    fi
+    STACK_TEST_CURL_OUT=0.007 sh_run "$BEN" /x 1
+    if [ "$STATUS" -eq 0 ] && grep -Eq '^total +7\.00 +7\.00 +7\.00$' "$WORK/out"; then good "bench.sh: a single request gives the same value for every percentile"; else bad "bench.sh: one request misbehaved (status $STATUS): $(cat "$WORK/out")"; fi
+else
+    echo "skipped: no bench.sh in the examples/extra/ of the template (STACK_TEMPLATE_DIR, or TEMPLATE_REL of stack.conf)"
+fi
+
 # ---- doctor.sh -----------------------------------------------------------------------------------------------------------------
 echo "--- doctor.sh"
 sh_run doctor.sh --guide
