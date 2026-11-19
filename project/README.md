@@ -192,6 +192,7 @@ Every command below is relative to the project root: `cd "{{PROJECT_ROOT_ABS}}"`
 | `bash {{DEST_REL}}/tests/locked-test.sh` | run.sh and locked.sh without a server |
 | `bash {{DEST_REL}}/tests/scripts-test.sh` | ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh and doctor.sh against a fake ssh, rsync and curl |
 | `bash {{DEST_REL}}/tests/render-test.sh` | `render.sh`, with good and bad parameters (it finds the template through `TEMPLATE_REL`, or `STACK_TEMPLATE_DIR`) |
+| `{{DEST_REL}}/extra/` | your own scripts; `render.sh --force` rewrites only its `README.md` |
 
 Other things you will want, all through `ssh {{SSH_ALIAS}}` or `run.sh`:
 

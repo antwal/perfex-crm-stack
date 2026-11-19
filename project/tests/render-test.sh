@@ -135,9 +135,14 @@ D="$R/${EXAMPLE_DEST:-tools/docker}"
 if [ "$st" -ne 0 ]; then bad "render failed: $(cat "$WORK/out")"
 else
     good "render writes the project folder"
-    for f in stack.conf portainer.env README.md lib.sh sync.sh deploy.sh ci-local.sh run.sh doctor.sh snapshot.sh reset.sh install-perfex.sh locked.sh tests/deploy-test.sh tests/locked-test.sh tests/scripts-test.sh tests/render-test.sh ai/PROMPT.md ai/CLAUDE-section.md ai/memory-note.md; do
+    for f in stack.conf portainer.env README.md lib.sh sync.sh deploy.sh ci-local.sh run.sh doctor.sh snapshot.sh reset.sh install-perfex.sh locked.sh extra/README.md tests/deploy-test.sh tests/locked-test.sh tests/scripts-test.sh tests/render-test.sh ai/PROMPT.md ai/CLAUDE-section.md ai/memory-note.md; do
         [ -f "$D/$f" ] || bad "missing in the project folder: $f"
     done
+    if [ "$(ls -A "$D/extra" | tr '\n' ' ')" = "README.md " ] && ( . "$BASE"; grep -q "$SSH_ALIAS" "$D/extra/README.md" ) && grep -q 'This folder is yours' "$D/extra/README.md"; then
+        good "extra/ holds the README.md and nothing else, with the values of the project in it"
+    else
+        bad "extra/ is not the README.md alone: $(ls -A "$D/extra" 2>&1 | tr '\n' ' ')"
+    fi
     for f in "$D"/*.sh "$D"/tests/*.sh; do
         [ -x "$f" ] || bad "not executable: $f"
         bash -n "$f" || bad "bash -n fails on $f"
@@ -152,10 +157,13 @@ fi
 
 # a folder that is not empty
 echo "tampered" > "$D/stack.conf"; echo "mine" > "$D/notes.txt"
+mkdir -p "$D/extra"; printf '#!/usr/bin/env bash\necho mine\n' > "$D/extra/mine.sh"; cp "$D/extra/mine.sh" "$WORK/mine.sh.orig"; echo "tampered" > "$D/extra/README.md"
 bash "$RENDER" "$WORK/p/good.env" "$R" > "$WORK/out" 2>&1; st=$?
 if [ "$st" -ne 0 ] && [ "$(cat "$D/stack.conf")" = tampered ]; then good "a folder that is not empty is refused without --force, and untouched"; else bad "a non-empty folder was not refused (status $st)"; fi
 bash "$RENDER" "$WORK/p/good.env" "$R" --force > "$WORK/out" 2>&1; st=$?
 if [ "$st" -eq 0 ] && grep -q '^SSH_ALIAS=' "$D/stack.conf" && [ "$(cat "$D/notes.txt")" = mine ]; then good "--force replaces the generated files and keeps the others"; else bad "--force did not behave (status $st): $(cat "$WORK/out")"; fi
+if cmp -s "$D/extra/mine.sh" "$WORK/mine.sh.orig"; then good "--force keeps a script of the user in extra/, identical to what it was"; else bad "--force changed or removed the script in extra/"; fi
+if [ "$(ls -A "$D/extra" | tr '\n' ' ')" = "README.md mine.sh " ] && grep -q 'This folder is yours' "$D/extra/README.md"; then good "--force rewrites extra/README.md and touches nothing else in extra/"; else bad "--force did not restore extra/README.md alone: $(ls -A "$D/extra" | tr '\n' ' ')"; fi
 
 # the destination is never inside the template
 before="$(find "$TEMPLATE_DIR" -type f | wc -l | tr -d ' ')"

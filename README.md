@@ -51,6 +51,7 @@ perfex-crm-stack/
 │   ├── README.md          the runbook of your instance, with your values filled in
 │   ├── stack.conf  portainer.env
 │   ├── lib.sh  sync.sh  deploy.sh  ci-local.sh  run.sh  doctor.sh  snapshot.sh  reset.sh  install-perfex.sh  locked.sh
+│   ├── extra/             README.md only: your own scripts, never touched by render.sh --force
 │   └── tests/             deploy-test.sh, locked-test.sh, scripts-test.sh, render-test.sh (a fake ssh and rsync: no server is touched)
 ├── examples/
 │   ├── params/example.env       a filled-in parameter file with neutral values
