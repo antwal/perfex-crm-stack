@@ -1,0 +1,29 @@
+Include /etc/ssh/sshd_config.d/*.conf
+# ^ RULE: this Include stays the FIRST line. For almost every keyword sshd keeps the first value it reads, so the
+# optional files that tools/entrypoint.sh writes in sshd_config.d (10-env.conf: SetEnv; 20-forwarding.conf: AllowTcpForwarding
+# yes, only with SSH_TCP_FORWARDING=1) win over the restrictive values below. Move the Include down and they stop working.
+# One exception: "Port" accumulates instead of being overridden (two Port lines mean two listening ports). That is why
+# SSH_PORT is not written to a file: the entrypoint starts sshd with "-p", which makes sshd ignore the Port line below.
+#
+# sshd of the tools container: public key only, user www-data only, no root, no password.
+Port 2222
+AddressFamily any
+HostKey /etc/ssh/hostkeys/ssh_host_ed25519_key
+HostKey /etc/ssh/hostkeys/ssh_host_rsa_key
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+PubkeyAuthentication yes
+AuthorizedKeysFile /etc/ssh/authorized_keys.d/%u
+AllowUsers www-data
+UsePAM no
+X11Forwarding no
+AllowAgentForwarding no
+AllowTcpForwarding no
+PermitTunnel no
+GatewayPorts no
+ClientAliveInterval 60
+ClientAliveCountMax 3
+LogLevel INFO
+Subsystem sftp internal-sftp

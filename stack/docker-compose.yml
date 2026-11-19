@@ -1,0 +1,88 @@
+# Test stack for Perfex CRM modules: one web container and one service container ("tools") reached over SSH.
+#
+# This file is used as it is, never generated: paste it into the Portainer web editor, or point a Portainer Git
+# repository stack at it (Compose path: stack/docker-compose.yml). Every value comes from a stack variable with a
+# neutral default; the project folder made by render.sh ships portainer.env with the right values for your project.
+#
+#   web     Apache + PHP-FPM, built by you from stack/web/Dockerfile (README: "Build the two images").
+#   tools   sshd (key only, user www-data), PHP CLI versions, Composer, rsync, MariaDB client. Deploys, the PHP matrix
+#           and the integration tests run here. Built by you from stack/tools.Dockerfile.
+#
+# Outside the stack, already running on the server: MariaDB (required) and Mailpit (optional).
+#
+# Rules this file follows (so it works the same from the web editor and from a Git repository):
+#   - no "build:" (Portainer cannot build for remote environments): both images are built on the server beforehand;
+#   - no relative paths (they need the Business Edition): host paths start from ${REMOTE_ROOT};
+#   - no secrets: the database credentials are stack variables and must be set in Portainer (${VAR:?} refuses to start
+#     without them); the SSH public key is read from a file on the host.
+#
+# Optional pieces: stack/web-extra.yml (a second web instance on another PHP version, added with "Additional paths").
+# No port is published on the host: the web container and sshd are reached over the Docker network by DNS name.
+
+services:
+  web:
+    image: ${WEB_IMAGE:-perfex-web:8.4}
+    container_name: ${STACK_NAME:-myproject}
+    hostname: ${APP_HOST:-myproject.perfexcrm.docker}
+    restart: unless-stopped
+    # Apache is process 1 in the image: it gets SIGTERM from Docker and stops cleanly, well inside this limit.
+    stop_grace_period: 20s
+    networks:
+      localnet:
+        aliases:
+          - ${APP_HOST:-myproject.perfexcrm.docker}
+    expose:
+      - "80"
+    environment:
+      TZ: ${TZ:-UTC}
+      # 1 = hand the Authorization header to PHP (Apache does not by default). Read at every start of the container.
+      PASS_AUTHORIZATION: ${PASS_AUTHORIZATION:-0}
+    volumes:
+      - ${REMOTE_ROOT:-/srv/docker/perfexcrm/myproject}/app:/var/www/html
+      # Optional: your own PHP upload limits instead of the ones built into the image. The file must exist on the
+      # host BEFORE the stack starts, as a file (otherwise Docker creates a folder with that name).
+      # - ${REMOTE_ROOT:-/srv/docker/perfexcrm/myproject}/web/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+
+  tools:
+    image: ${TOOLS_IMAGE:-perfex-tools:8.1-8.5}
+    container_name: ${STACK_NAME:-myproject}-tools
+    hostname: ${TOOLS_HOST:-myproject-tools.perfexcrm.docker}
+    restart: unless-stopped
+    # The server is small and shared: the container cannot saturate it.
+    cpus: ${TOOLS_CPUS:-2}
+    mem_limit: ${TOOLS_MEM:-2g}
+    pids_limit: ${TOOLS_PIDS:-512}
+    networks:
+      localnet:
+        aliases:
+          - ${TOOLS_HOST:-myproject-tools.perfexcrm.docker}
+    expose:
+      - "${SSH_PORT:-2222}"
+    environment:
+      TZ: ${TZ:-UTC}
+      PERFEX_URL: "${APP_URL:-http://myproject.perfexcrm.docker}"
+      PERFEX_APP_PATH: /app
+      PERFEX_DB_HOST: ${PERFEX_DB_HOST:?set it in the Portainer stack variables}
+      PERFEX_DB_NAME: ${PERFEX_DB_NAME:?set it in the Portainer stack variables}
+      PERFEX_DB_USER: ${PERFEX_DB_USER:?set it in the Portainer stack variables}
+      PERFEX_DB_PASSWORD: ${PERFEX_DB_PASSWORD:?set it in the Portainer stack variables}
+      MAILPIT_URL: "${MAILPIT_URL:-}"
+      MAILPIT_SMTP_HOST: "${MAILPIT_SMTP_HOST:-}"
+      MAILPIT_SMTP_PORT: "${MAILPIT_SMTP_PORT:-}"
+      # Optional sshd switches, read by tools/entrypoint.sh at every start. SSH_PORT: if you set it, set the same
+      # Port in ~/.ssh/config. SSH_TCP_FORWARDING=1 allows "ssh -L" (for example a MariaDB client on your Mac).
+      SSH_PORT: "${SSH_PORT:-}"
+      SSH_TCP_FORWARDING: "${SSH_TCP_FORWARDING:-0}"
+      # The variables the entrypoint copies into every SSH session (empty ones are skipped).
+      SSH_EXPORT_VARS: "TZ PERFEX_URL PERFEX_APP_PATH PERFEX_EXTRA_URL PERFEX_EXTRA_APP_PATH PERFEX_DB_HOST PERFEX_DB_NAME PERFEX_DB_USER PERFEX_DB_PASSWORD MAILPIT_URL MAILPIT_SMTP_HOST MAILPIT_SMTP_PORT COMPOSER_HOME COMPOSER_CACHE_DIR"
+    volumes:
+      - ${REMOTE_ROOT:-/srv/docker/perfexcrm/myproject}/app:/app
+      - ${REMOTE_ROOT:-/srv/docker/perfexcrm/myproject}/repo:/repo
+      # Both must exist on the host as files/folders BEFORE the stack starts (see the README, server step).
+      - ${REMOTE_ROOT:-/srv/docker/perfexcrm/myproject}/tools/authorized_keys:/etc/ssh/authorized_keys.d/www-data:ro
+      - ${REMOTE_ROOT:-/srv/docker/perfexcrm/myproject}/tools/hostkeys:/etc/ssh/hostkeys
+
+networks:
+  localnet:
+    name: ${DOCKER_NETWORK:-containers}
+    external: true

@@ -1,0 +1,44 @@
+# Optional second web instance, for trying the same modules on another PHP version.
+#
+# Add it to the main file, do not use it alone:
+#   - Portainer Git repository: put "stack/web-extra.yml" in "Additional paths";
+#   - Portainer web editor: paste the two blocks below into the main file (merge the tools block into the existing one).
+#
+# Before using it:
+#   1. build the image for that PHP version (README, "Build the two images"), from the build/ copy on the server:
+#        cd <REMOTE_ROOT>/build
+#        docker build -f web/Dockerfile --build-arg PHP_VERSION=8.5 -t perfex-web:8.5 web
+#      Name: [<IMAGE_OWNER>/]perfex-web:<PHP version>. The template only ships the Dockerfile: there is no published image.
+#   2. create the application folder on the server, owned by uid 33:  mkdir -p ${REMOTE_ROOT}/app-extra && chown 33:33 ${REMOTE_ROOT}/app-extra
+#   3. set the stack variables WEB_EXTRA_IMAGE, WEB_EXTRA_NAME and WEB_EXTRA_HOST (below; the project folder's portainer.env
+#      carries them when the WEB_EXTRA_* parameters are set).
+#   4. install the application in /app-extra (install-perfex.sh works on the first target only: copy it yourself with
+#      rsync, as the README shows) and list "app-extra" in APP_TARGETS so deploy.sh can use it.
+#
+# The tools container gets the new folder as /app-extra and the variables PERFEX_EXTRA_URL and PERFEX_EXTRA_APP_PATH.
+
+services:
+  web-extra:
+    image: ${WEB_EXTRA_IMAGE:?set it to the image you built for that PHP version, for example perfex-web:8.5}
+    container_name: ${WEB_EXTRA_NAME:?set it, for example myproject-php85}
+    hostname: ${WEB_EXTRA_HOST:?set it, for example myproject-php85.perfexcrm.docker}
+    restart: unless-stopped
+    stop_grace_period: 20s
+    networks:
+      localnet:
+        aliases:
+          - ${WEB_EXTRA_HOST:?set it, for example myproject-php85.perfexcrm.docker}
+    expose:
+      - "80"
+    environment:
+      TZ: ${TZ:-UTC}
+      PASS_AUTHORIZATION: ${PASS_AUTHORIZATION:-0}
+    volumes:
+      - ${REMOTE_ROOT:-/srv/docker/perfexcrm/myproject}/app-extra:/var/www/html
+
+  tools:
+    environment:
+      PERFEX_EXTRA_URL: "http://${WEB_EXTRA_HOST:?set it, for example myproject-php85.perfexcrm.docker}"
+      PERFEX_EXTRA_APP_PATH: /app-extra
+    volumes:
+      - ${REMOTE_ROOT:-/srv/docker/perfexcrm/myproject}/app-extra:/app-extra
