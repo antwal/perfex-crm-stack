@@ -303,6 +303,23 @@ suite of your project against the instance). Copy the ones you want:
 cp {{TEMPLATE_REL}}/examples/extra/<name>.sh {{DEST_REL}}/extra/
 ```
 
+`e2e.sh <folder>` runs `npx playwright test` in a folder of your project that holds a `playwright.config.ts`, and hands the
+instance to it through the environment: `PERFEX_URL` (the application's address), `PLAYWRIGHT_OUTPUT_DIR` (a folder under
+`{{LOCAL_TMP_DIR}}/e2e/`), `STACK_SSH` (the SSH alias, for a fixture that must be made on the server) and `MAILPIT_URL` when
+there is one. The template brings no Node: the suite, Playwright and its browsers are yours. The smallest configuration that
+reads those variables:
+
+```ts
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './specs',                                              // your *.spec.ts files
+  outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR ?? 'test-results',  // e2e.sh puts it under {{LOCAL_TMP_DIR}}/e2e/
+  use: { baseURL: process.env.PERFEX_URL },                        // e2e.sh sets it to the address of the application
+  reporter: 'list',
+});
+```
+
 **Testing a script of yours.** Use the scheme of `tests/scripts-test.sh`: a fake `ssh`, `rsync` and `curl` that only record
 their calls, first in `PATH`; run your script with them, and check that every refusal made no call at all and that a good run
 made the `ssh` call you expect. The fakes are at the top of that test: copy them.

@@ -470,6 +470,57 @@ else
     echo "skipped: no bench.sh in the examples/extra/ of the template (STACK_TEMPLATE_DIR, or TEMPLATE_REL of stack.conf)"
 fi
 
+echo "--- examples/extra/e2e.sh"
+if [ -f "$WORK/docker/extra/e2e.sh" ]; then
+    E2E=extra/e2e.sh
+    mkdir -p "$WORK/tests/e2e/mysuite" "$WORK/tests/e2e/nocfg"; : > "$WORK/tests/e2e/mysuite/playwright.config.ts"
+    refused "no argument"                                    "$E2E"
+    refused "a folder with .."                               "$E2E" ../tests/e2e/mysuite
+    refused "a folder with .. inside"                        "$E2E" tests/../tests/e2e/mysuite
+    refused "an absolute folder"                             "$E2E" "$WORK/tests/e2e/mysuite"
+    refused "a folder with a command"                        "$E2E" 'tests/e2e/mysuite;id'
+    refused "a folder without playwright.config.ts"          "$E2E" tests/e2e/nocfg
+    refused "a folder that does not exist"                   "$E2E" tests/e2e/ghost
+    refused "an argument with a space"                       "$E2E" tests/e2e/mysuite '--grep=a b'
+    refused "an argument with a semicolon"                   "$E2E" tests/e2e/mysuite '--grep=a;id'
+    refused "an argument with a command substitution"        "$E2E" tests/e2e/mysuite '$(id)'
+    refused "an argument with a backtick"                    "$E2E" tests/e2e/mysuite '`id`'
+    refused "an argument with a quote"                       "$E2E" tests/e2e/mysuite "--grep='x'"
+    refused "an argument with a pipe"                        "$E2E" tests/e2e/mysuite '--grep=a|b'
+    refused "an empty argument"                              "$E2E" tests/e2e/mysuite ''
+    STACK_SSH='-oProxyCommand=x' refused "an SSH alias that is an option" "$E2E" tests/e2e/mysuite
+
+    sh_run "$E2E" tests/e2e/mysuite --grep=login specs/login.spec.ts
+    expected_env="$(printf '%s\n' "MAILPIT_URL=$MAILPIT_URL" "PERFEX_URL=$APP_URL" "PLAYWRIGHT_OUTPUT_DIR=$WORK/.tmp/e2e/mysuite" "STACK_SSH=$SSH_ALIAS")"
+    if [ "$STATUS" -eq 0 ] && [ "$(wc -l < "$CALLS" | tr -d ' ')" -eq 1 ] \
+        && [ "$(cat "$CALLS")" = "npx [playwright] [test] [--config] [playwright.config.ts] [--grep=login] [specs/login.spec.ts]" ]; then
+        good "e2e.sh: it runs npx playwright test --config playwright.config.ts with the arguments, and calls nothing else"
+    else
+        bad "e2e.sh: the npx call is not as expected (status $STATUS): $(cat "$CALLS") / $(cat "$WORK/out")"
+    fi
+    if [ "$(cat "$CALLS".env.1 2>/dev/null)" = "$expected_env" ] && [ "$(cat "$CALLS".pwd.1 2>/dev/null)" = "$WORK/tests/e2e/mysuite" ] && [ -d "$WORK/.tmp/e2e/mysuite" ]; then
+        good "e2e.sh: in the suite's folder, with PERFEX_URL = APP_URL, STACK_SSH = the alias, MAILPIT_URL and an output folder under LOCAL_TMP_DIR"
+    else
+        bad "e2e.sh: the environment of playwright is not as expected: $(cat "$CALLS".env.1 2>&1) / folder $(cat "$CALLS".pwd.1 2>&1)"
+    fi
+    sh_run "$E2E" tests/e2e/mysuite
+    if [ "$STATUS" -eq 0 ] && [ "$(cat "$CALLS")" = "npx [playwright] [test] [--config] [playwright.config.ts]" ]; then good "e2e.sh: with no further argument the call is the bare playwright test"; else bad "e2e.sh: the call without arguments is wrong (status $STATUS): $(cat "$CALLS")"; fi
+    STACK_TEST_NPX_STATUS=3 sh_run "$E2E" tests/e2e/mysuite
+    if [ "$STATUS" -eq 3 ]; then good "e2e.sh: the exit status is Playwright's (3)"; else bad "e2e.sh: Playwright's status was lost (status $STATUS)"; fi
+    # no Mailpit in stack.conf: the variable is not passed, even if the caller has one in its environment
+    cp "$WORK/docker/stack.conf" "$WORK/stack.conf.keep"
+    sed -e 's#^MAILPIT_URL=.*#MAILPIT_URL=""#' "$WORK/stack.conf.keep" > "$WORK/docker/stack.conf"
+    MAILPIT_URL=http://inherited.example sh_run "$E2E" tests/e2e/mysuite
+    if [ "$STATUS" -eq 0 ] && ! grep -q '^MAILPIT_URL=' "$CALLS".env.1 && grep -q "^PERFEX_URL=$APP_URL\$" "$CALLS".env.1; then
+        good "e2e.sh: without a Mailpit in stack.conf, MAILPIT_URL is not passed on (not even an inherited one)"
+    else
+        bad "e2e.sh: MAILPIT_URL was passed although stack.conf has none: $(cat "$CALLS".env.1 2>&1)"
+    fi
+    cp "$WORK/stack.conf.keep" "$WORK/docker/stack.conf"
+else
+    echo "skipped: no e2e.sh in the examples/extra/ of the template (STACK_TEMPLATE_DIR, or TEMPLATE_REL of stack.conf)"
+fi
+
 # ---- doctor.sh -----------------------------------------------------------------------------------------------------------------
 echo "--- doctor.sh"
 sh_run doctor.sh --guide
