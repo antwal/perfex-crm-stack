@@ -215,6 +215,12 @@ tools container, with `PERFEX_URL`, `PERFEX_APP_PATH`, `PERFEX_DB_*`, `MAILPIT_U
 `examples/module/sample_module/` shows the shape, with a `TestInstance.php` helper. A browser-test suite (Playwright and
 the like) connects the same way: ssh to the alias for anything that must run on the server, `http` to `APP_URL` for the rest.
 
+**Your own scripts.** The generated folder has an `extra/` folder for them: `render.sh --force` rewrites only its `README.md`
+and never touches what you add. A script starts by loading `stack.conf` and `lib.sh` and then has the alias, the project
+root, `remote_locked` (a heavy job inside the lock) and the validators: the generated README, section "Writing your own
+script", lists them and gives the rules (everything that reaches the server passes a validator or a closed list) and the
+smallest complete script. `examples/extra/` has three to copy: Infection on the changed files, a response-time benchmark, a Playwright suite.
+
 ## 7. Updating
 
 - **A parameter changes:** edit the parameter file, `render.sh ... --force`, look at the difference, apply the change.

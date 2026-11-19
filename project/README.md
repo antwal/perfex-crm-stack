@@ -192,7 +192,7 @@ Every command below is relative to the project root: `cd "{{PROJECT_ROOT_ABS}}"`
 | `bash {{DEST_REL}}/tests/locked-test.sh` | run.sh and locked.sh without a server |
 | `bash {{DEST_REL}}/tests/scripts-test.sh` | ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh and doctor.sh against a fake ssh, rsync and curl |
 | `bash {{DEST_REL}}/tests/render-test.sh` | `render.sh`, with good and bad parameters (it finds the template through `TEMPLATE_REL`, or `STACK_TEMPLATE_DIR`) |
-| `{{DEST_REL}}/extra/` | your own scripts; `render.sh --force` rewrites only its `README.md` |
+| `{{DEST_REL}}/extra/` | your own scripts; `render.sh --force` rewrites only its `README.md` (see "Writing your own script" below) |
 
 Other things you will want, all through `ssh {{SSH_ALIAS}}` or `run.sh`:
 
@@ -220,6 +220,84 @@ A folder `<name>/<name>.php` under `{{SYNC_DIR}}/`, with `<name>` made of lowerc
 PHP version. The example module of the template (`examples/module/sample_module/`) shows the shape, including a
 `test:int` script and `tests/Integration/TestInstance.php`, a helper that reads the stack variables
 (`PERFEX_URL`, `PERFEX_APP_PATH`, `PERFEX_DB_*`, `MAILPIT_*`) that the SSH session provides.
+
+### Writing your own script
+
+Your own scripts live in `{{DEST_REL}}/extra/`: `render.sh --force` rewrites only the `README.md` of that folder and leaves
+everything else there as it is. A script starts with the lines below and is made executable (`chmod 755`):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")/.." && pwd -P)"   # the folder of the stack scripts (stack.conf, lib.sh, locked.sh)
+# shellcheck source=../lib.sh
+. "$HERE/lib.sh"
+stack_load "$HERE"
+```
+
+`stack_load` reads `stack.conf` and gives the script `HERE`, `HOST` (the SSH alias; `STACK_SSH` in the environment replaces
+it), `ROOT` (the project root), `REPO_DIR` (`$ROOT/{{SYNC_DIR}}`, the folder mirrored to the server) and every variable of
+`stack.conf`: `APP_URL`, `LOCAL_TMP_DIR`, `SYNC_DIR`, `DEFAULT_PHP`, `TOOLS_PHP_VERSIONS`, `MAILPIT_URL`, and the others.
+`lib.sh` adds the functions below. They are the API of your scripts: from version 0.2.0 of the template they keep their names
+and arguments until the next major version, and the template's `CHANGELOG.md` announces a change.
+
+| Function | What it does |
+|---|---|
+| `die <message>` | prints the message on the error output and exits with status 1 |
+| `in_list <word> <word> ...` | succeeds when the first word is one of the others: `in_list "$php" $TOOLS_PHP_VERSIONS` |
+| `valid_host`, `valid_module`, `valid_ci_module`, `valid_target`, `valid_php` | succeed when the value matches the strict pattern of an SSH alias, of a module folder name, of a folder tested by `ci-local.sh` (a library may have `-`), of an application folder (`app`, `app-extra`), of a PHP version (`8.4`) |
+| `valid_relpath <path> [allow-empty]` | a relative folder: no `..`, no `//`, no leading `/` or `.`, no trailing `/` |
+| `valid_globs "<words>"` | blank-separated rsync patterns made of letters, digits and `. _ - / * ?` |
+| `discover_modules <folder>` | the names of the sub-folders `<name>/<name>.php`, one per line (symbolic links are skipped) |
+| `deploy_module_names`, `ci_module_names` | the modules `deploy.sh` and `ci-local.sh` accept: the closed list of `stack.conf`, or the ones found in `REPO_DIR` |
+| `remote_locked '<command>'` | runs a shell command on the server, inside the lock, as one argument of `locked.sh`; the standard input reaches the command |
+| `ensure_locked_sh` | puts `locked.sh` on the server when it is not there (one ssh round trip) |
+
+**The rule.** Everything that ends up in a command run on the server, or handed to another program, passes a validator of
+`lib.sh` or a closed list first, and the checks come **before** the first call. Values go to the server as positional
+parameters quoted with `printf '%q'`, to a script sent with `bash -s --` and a here-document, never pasted into its text:
+`deploy.sh` is the model (the `_args=` line and the `remote_locked "bash -s -- $_args" <<'REMOTE'` that follows it), and the
+script on the server checks what it receives again: the server does not trust the Mac more than the Mac trusts free text.
+
+**Heavy jobs.** `remote_locked '<command>'` runs the command inside the lock `{{LOCK_FILE}}`: one heavy job at a time per
+server, at low priority, and whatever is left in its process group is terminated when it ends. The standard input crosses
+it, so a probe that must not consume it reads from `/dev/null` (`ensure_locked_sh` shows how). A script that does not go
+through `sync.sh` (which copies `locked.sh` together with the code) calls `ensure_locked_sh` before `remote_locked`. To
+choose the PHP on the server put `PATH=/opt/php/<version>:$PATH` in the command, after `valid_php` and `in_list "$v"
+$TOOLS_PHP_VERSIONS` have checked the version.
+
+**Files and secrets.** Temporary files and outputs go in `$ROOT/$LOCAL_TMP_DIR/<name of the script>/` (`{{LOCAL_TMP_DIR}}/`
+in this project): one folder to ignore and to clean. No secret in a file, a log or an output: the database credentials live
+in the stack variables on the server, and a script that needs them reads them there, over ssh. The scripts run on the Mac:
+write bash 3.2 (no associative arrays, no `mapfile`, no `${var,,}`, and no `"${array[@]}"` of an empty array under `set -u`).
+
+**The smallest complete script** prints the version of the default PHP of the tools container, inside the lock. Save it as
+`{{DEST_REL}}/extra/php-version.sh`:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")/.." && pwd -P)"
+. "$HERE/lib.sh"
+stack_load "$HERE"
+valid_php "$DEFAULT_PHP" || die "invalid DEFAULT_PHP: $DEFAULT_PHP"
+# shellcheck disable=SC2086
+in_list "$DEFAULT_PHP" $TOOLS_PHP_VERSIONS || die "PHP $DEFAULT_PHP is not in the tools image"
+ensure_locked_sh
+remote_locked "PATH=/opt/php/$DEFAULT_PHP:\$PATH php -v | head -n 1"
+```
+
+**Examples.** The template has three scripts of this kind in `examples/extra/`: `infection-diff.sh` (Infection on the files of a
+module that changed, on the server), `bench.sh` (the response times of one URL, with percentiles) and `e2e.sh` (a Playwright
+suite of your project against the instance). Copy the ones you want:
+
+```bash
+cp {{TEMPLATE_REL}}/examples/extra/<name>.sh {{DEST_REL}}/extra/
+```
+
+**Testing a script of yours.** Use the scheme of `tests/scripts-test.sh`: a fake `ssh`, `rsync` and `curl` that only record
+their calls, first in `PATH`; run your script with them, and check that every refusal made no call at all and that a good run
+made the `ssh` call you expect. The fakes are at the top of that test: copy them.
 
 ## 3. The `.stack-managed` marker: what deploy.sh may overwrite
 

@@ -3,6 +3,14 @@
 # Written for bash 3.2, the one macOS ships: no associative arrays, no mapfile, no ${var,,}.
 # Everything that ends up in a command executed on the server is checked here first: the module, the target, the SSH alias
 # and the paths are closed lists or values that match a strict pattern, never free text.
+#
+# THE API OF YOUR OWN SCRIPTS. A script of yours (in the extra/ folder next to this file: see extra/README.md and the section
+# "Writing your own script" of README.md) sources this file and calls stack_load. From version 0.2.0 of the template, these
+# functions are the API of such scripts and keep their names and arguments until the next major version, a change being
+# announced in the CHANGELOG of the template: die, in_list, valid_host, valid_module, valid_ci_module, valid_target,
+# valid_php, valid_relpath, valid_globs, stack_load (it sets HERE, HOST, ROOT and REPO_DIR and loads stack.conf),
+# discover_modules, deploy_module_names, ci_module_names, remote_locked, ensure_locked_sh. Anything else in this file
+# (the *_RE patterns, a helper that is not in that list) is internal and may change without notice.
 
 die() { echo "$*" >&2; exit 1; }
 
