@@ -135,8 +135,8 @@ it. The four values become the Portainer variables of step 5 and go nowhere else
    - **Web editor**: paste the whole of `stack/docker-compose.yml`; or
    - **Repository**: the Git method of the template's README (reference a tag, Compose path `stack/docker-compose.yml`).
 2. **Environment variables > Load variables from .env file**: choose `{{DEST_REL}}/portainer.env` (no secrets inside).
-3. Add by hand the four database variables, **not** in any file: `PERFEX_DB_HOST`, `PERFEX_DB_NAME`, `PERFEX_DB_USER`,
-   `PERFEX_DB_PASSWORD`. Without them the stack refuses to start, on purpose.
+3. The four database variables arrive from the file **empty**: type their values in the form, `PERFEX_DB_HOST`, `PERFEX_DB_NAME`,
+   `PERFEX_DB_USER`, `PERFEX_DB_PASSWORD`. The values go in no file; while they are empty the stack refuses to start, on purpose.
 4. **Deploy the stack**. The containers are `{{STACK_NAME}}` (web) and `{{STACK_NAME}}-tools`.
 
 ### Step 6, on the Mac: check

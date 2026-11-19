@@ -59,12 +59,13 @@ container keeps the old image, open it and press **Recreate**, again with "Re-pu
 ## What to paste, and the variables
 
 Paste `docker-compose.yml` into **Stacks > Add stack > Web editor**, or use a Git repository stack (the README of the template
-explains both). Then set the variables: load the project folder's `portainer.env` (**Load variables from .env file**), and add by
-hand the four database variables, which are never in a file.
+explains both). Then set the variables: load the project folder's `portainer.env` (**Load variables from .env file**); the four database
+variables arrive from the file with an **empty value**, and you type their values in the Portainer form (the values are
+never in a file).
 
 | Variable | Default | |
 |---|---|---|
-| `PERFEX_DB_HOST`, `PERFEX_DB_NAME`, `PERFEX_DB_USER`, `PERFEX_DB_PASSWORD` | none | **required**: the stack refuses to start without them |
+| `PERFEX_DB_HOST`, `PERFEX_DB_NAME`, `PERFEX_DB_USER`, `PERFEX_DB_PASSWORD` | none (loaded empty from `portainer.env`) | **required**: type the values in Portainer; the stack refuses to start while they are empty |
 | `STACK_NAME` | `myproject` | container names: `<STACK_NAME>` and `<STACK_NAME>-tools` |
 | `REMOTE_ROOT` | `/srv/docker/perfexcrm/myproject` | folder on the server: `app/`, `repo/`, `tools/` (every host path starts here) |
 | `APP_HOST`, `TOOLS_HOST` | `myproject.perfexcrm.docker`, `myproject-tools.perfexcrm.docker` | DNS names on the network |

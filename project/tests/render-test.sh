@@ -142,8 +142,9 @@ else
     if grep -rEq '\{\{[A-Z0-9_]+\}\}' "$D"; then bad "placeholders left: $(grep -rEn '\{\{[A-Z0-9_]+\}\}' "$D" | head -n 3)"; else good "no placeholder is left in the generated files"; fi
     if [ "$(ls -A "$R" | tr '\n' ' ')" = "$(echo "$EXAMPLE_DEST" | cut -d/ -f1) " ]; then good "nothing is written outside the destination folder"; else bad "the project root now holds: $(ls -A "$R" | tr '\n' ' ')"; fi
     ( . "$BASE"; grep -q "^SSH_ALIAS=\"$SSH_ALIAS\"\$" "$D/stack.conf" ) && good "stack.conf carries the values of the parameters" || bad "stack.conf does not carry the SSH alias of the parameters"
-    if grep -Eq '^[A-Z0-9_]+=\s*$' "$D/portainer.env"; then bad "portainer.env has a variable with no value"; else good "portainer.env has no empty variable"; fi
-    if grep -Eq '^PERFEX_DB_[A-Z]+=' "$D/portainer.env"; then bad "portainer.env holds a database variable"; else good "portainer.env holds no database variable"; fi
+    if grep -Ev '^PERFEX_DB_' "$D/portainer.env" | grep -Eq '^[A-Z0-9_]+=\s*$'; then bad "portainer.env has a variable with no value (other than the four PERFEX_DB_*)"; else good "portainer.env has no empty variable other than the four PERFEX_DB_*"; fi
+    if [ "$(grep -Ec '^PERFEX_DB_(HOST|NAME|USER|PASSWORD)=$' "$D/portainer.env")" -eq 4 ]; then good "portainer.env holds the four PERFEX_DB_* lines, all empty"; else bad "portainer.env does not hold exactly the four empty PERFEX_DB_* lines"; fi
+    if grep -Eq '^PERFEX_DB_[A-Z]+=.+' "$D/portainer.env"; then bad "portainer.env holds a database value"; else good "portainer.env holds no database value"; fi
 fi
 
 # a folder that is not empty

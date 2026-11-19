@@ -123,7 +123,8 @@ variables in both methods, without changing the file. The field names below foll
 *Edit a stack*); check them against the version you run.
 
 **Web editor.** *Stacks > Add stack > Web editor*: paste `stack/docker-compose.yml`. In *Environment variables* use
-*Load variables from .env file* with the project folder's `portainer.env`, then add the four `PERFEX_DB_*` variables by hand.
+*Load variables from .env file* with the project folder's `portainer.env`, then type the values of the four `PERFEX_DB_*`
+variables, which the file brings in empty.
 To change the compose file later: *Editor*, paste, *Update the stack*.
 
 **Git repository.** *Stacks > Add stack > Repository*:

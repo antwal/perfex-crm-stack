@@ -231,9 +231,11 @@ if [ "$INCLUDE_AI" = 1 ] && [ -d "$_tpl/ai" ]; then
         _written+=("$_relpath")
     done < <(find "$_tpl/ai" -type f ! -name '.DS_Store' | sort)
 fi
-# portainer.env: a variable with no value is left out, so that Portainer does not get an empty variable
+# portainer.env: a variable with no value is left out, so that Portainer does not get an empty variable; the four
+# PERFEX_DB_* lines are the exception: they are empty on purpose, so that loading the file creates them in Portainer and
+# the user only types the values there (the stack refuses to start while they are empty)
 if [ -f "$_dest/portainer.env" ]; then
-    perl -ni -e 'print unless /^[A-Z0-9_]+=\s*$/' "$_dest/portainer.env"
+    perl -ni -e 'print unless /^(?!PERFEX_DB_)[A-Z0-9_]+=\s*$/' "$_dest/portainer.env"
 fi
 for _relpath in "${_written[@]}"; do
     if grep -Eq '\{\{[A-Z0-9_]+\}\}' "$_dest/$_relpath"; then

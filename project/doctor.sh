@@ -45,7 +45,7 @@ Run the Mac steps from the project root:   cd $ROOT
    for example $db_example for both (README step 4 has the SQL). Keep the password out of chat and files.
 
 5. Portainer: Stacks > Add stack, name $STACK_NAME, web editor (paste stack/docker-compose.yml) or Git repository.
-   Stack variables: load $DEST_DIR/portainer.env, then add PERFEX_DB_HOST, PERFEX_DB_NAME, PERFEX_DB_USER, PERFEX_DB_PASSWORD by hand.
+   Stack variables: load $DEST_DIR/portainer.env, then type the values of PERFEX_DB_HOST, PERFEX_DB_NAME, PERFEX_DB_USER, PERFEX_DB_PASSWORD (loaded empty).
 
 6. Mac: $DEST_DIR/doctor.sh      then, if the application is not installed yet:  $DEST_DIR/install-perfex.sh <your Perfex folder or zip>
    and open $APP_URL in the browser to finish the installation.
