@@ -38,6 +38,7 @@ The template documents the setup it was built on, as a reference. Adapt it, or k
 perfex-crm-stack/
 ├── README.md              this file
 ├── LICENSE                MIT
+├── CHANGELOG.md           what changed in each version of the template
 ├── params.example.env     every parameter, commented, with its neutral default
 ├── render.sh              --check validates the parameters; otherwise it writes the PROJECT FOLDER (never stack/)
 ├── stack/                 used as it is: paste into Portainer, or point a Git repository stack at it
@@ -55,7 +56,11 @@ perfex-crm-stack/
 │   └── tests/             deploy-test.sh, locked-test.sh, scripts-test.sh, render-test.sh (a fake ssh and rsync: no server is touched)
 ├── examples/
 │   ├── params/example.env       a filled-in parameter file with neutral values
-│   └── module/sample_module/    the smallest module that goes through all of it, with unit and integration tests
+│   ├── module/sample_module/    the smallest module that goes through all of it, with unit and integration tests
+│   └── extra/                   scripts to copy into the generated extra/ folder (tested by scripts-test.sh)
+│       ├── infection-diff.sh    Infection on the changed files of a module, on the server, inside the lock
+│       ├── bench.sh             response times of one URL from the Mac, with percentiles
+│       └── e2e.sh               a Playwright suite of your project against the instance
 └── ai/                    optional: PROMPT.md, CLAUDE-section.md, memory-note.md
 ```
 
@@ -265,4 +270,4 @@ the web server lists no directories and reports no version; PHP-FPM is reachable
 
 ## 10. License
 
-MIT, see `LICENSE`.
+MIT, see `LICENSE`; the history is in `CHANGELOG.md`.

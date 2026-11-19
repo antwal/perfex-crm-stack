@@ -190,7 +190,7 @@ Every command below is relative to the project root: `cd "{{PROJECT_ROOT_ABS}}"`
 | `{{DEST_REL}}/install-perfex.sh <folder or zip>` | copies your Perfex CRM into `/app` (step 7) |
 | `bash {{DEST_REL}}/tests/deploy-test.sh` | deploy.sh against a fake ssh and rsync, and its server script against a folder tree: nothing touches a server |
 | `bash {{DEST_REL}}/tests/locked-test.sh` | run.sh and locked.sh without a server |
-| `bash {{DEST_REL}}/tests/scripts-test.sh` | ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh and doctor.sh against a fake ssh, rsync and curl |
+| `bash {{DEST_REL}}/tests/scripts-test.sh` | ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh, doctor.sh, the copy of locked.sh by run.sh and the example scripts of the template's `examples/extra/`, against a fake ssh, rsync, curl, git and npx |
 | `bash {{DEST_REL}}/tests/render-test.sh` | `render.sh`, with good and bad parameters (it finds the template through `TEMPLATE_REL`, or `STACK_TEMPLATE_DIR`) |
 | `{{DEST_REL}}/extra/` | your own scripts; `render.sh --force` rewrites only its `README.md` (see "Writing your own script" below) |
 

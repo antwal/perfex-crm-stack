@@ -46,3 +46,4 @@ Rules:
   owner's too; verify the result over SSH.
 - `{{DEST_REL}}/` is written by the template's `render.sh` from a parameter file: change the parameters and render again, do not
   edit the generated files.
+- `{{DEST_REL}}/extra/` holds the owner's own scripts: the same rules (validators, the lock, no secrets) apply to anything you add there.
