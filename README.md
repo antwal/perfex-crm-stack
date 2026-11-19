@@ -175,8 +175,10 @@ From the project root; every command has the values of your project (`tools/dock
 | `tools/docker/doctor.sh [--guide]` | check the stack from the Mac; print the setup steps with your values |
 | `tools/docker/install-perfex.sh <folder or zip>` | copy your Perfex CRM into `/app` |
 
-**The lock.** `locked.sh` lives in the code folder that `sync.sh` mirrors, not in the image, so it evolves with the template and
-always arrives in step with the scripts. Heavy jobs (`deploy.sh`, `ci-local.sh`, `run.sh`, `snapshot.sh`, `reset.sh`) wait for
+**The lock.** `locked.sh` is a file of the project folder, not of the image: `sync.sh` copies it to the server next to the
+code (`deploy.sh` and `ci-local.sh` run `sync.sh` first), and `run.sh`, `snapshot.sh`, `reset.sh` and `install-perfex.sh` (with a
+zip) put it there themselves when it is missing, so it always evolves with the template. Heavy jobs (`deploy.sh`,
+`ci-local.sh`, `run.sh`, `snapshot.sh`, `reset.sh`, `install-perfex.sh` with a zip) wait for
 each other with `flock` and run at low priority in a process group that is terminated when the job ends: a test server left
 running in the background does not hold the lock.
 
@@ -198,8 +200,10 @@ the like) connects the same way: ssh to the alias for anything that must run on 
 
 - `authorized_keys` (and `uploads.ini` if you mount it) must exist **as files before** the stack starts: otherwise Docker
   creates a folder with that name and the mount fails or misleads.
-- Portainer does not recreate a container when the image tag does not change: after a rebuild, press **Recreate** (with
-  "Re-pull image" off, the image is local).
+- After a rebuild under the same tag, *Update the stack* with "Re-pull image" **off** recreates the container on the new
+  image (the image is local); check with `docker inspect --format '{{.Image}}'` against `docker images --no-trunc`, and if the
+  container kept the old image, open it and press **Recreate**. A build made without copying the context first is all
+  `CACHED` and produces the same image: nothing to recreate.
 - Copy the build context with `rsync -av --delete`, not `scp -r`: on an existing folder `scp -r` nests the copy and the build
   reuses stale files. A `COPY` layer marked `CACHED` after you changed the file means the server still has the old one.
 - SSH sessions do not inherit the container's environment. sshd reads **only the first `SetEnv` line**, so all variables go on one

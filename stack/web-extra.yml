@@ -12,8 +12,9 @@
 #   2. create the application folder on the server, owned by uid 33:  mkdir -p ${REMOTE_ROOT}/app-extra && chown 33:33 ${REMOTE_ROOT}/app-extra
 #   3. set the stack variables WEB_EXTRA_IMAGE, WEB_EXTRA_NAME and WEB_EXTRA_HOST (below; the project folder's portainer.env
 #      carries them when the WEB_EXTRA_* parameters are set).
-#   4. install the application in /app-extra (install-perfex.sh works on the first target only: copy it yourself with
-#      rsync, as the README shows) and list "app-extra" in APP_TARGETS so deploy.sh can use it.
+#   4. install the application in /app-extra (install-perfex.sh works on the first target only: copy your Perfex folder
+#      yourself with rsync over the SSH alias into /app-extra, which the tools container mounts, then finish the
+#      installation wizard at the extra URL) and list "app-extra" in APP_TARGETS so deploy.sh can use it.
 #
 # The tools container gets the new folder as /app-extra and the variables PERFEX_EXTRA_URL and PERFEX_EXTRA_APP_PATH.
 

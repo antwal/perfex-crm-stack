@@ -1,2 +1,4 @@
 # Finder metadata
 .DS_Store
+# Your own parameter file (the quick start copies params.example.env to params.env): it holds your names and folders
+/params.env

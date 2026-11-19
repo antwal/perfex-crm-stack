@@ -103,6 +103,9 @@ DEV_MARKER|DEV_MARKER=".stack-managed"
 CI_STATIC_SCRIPT|CI_STATIC_SCRIPT="a b"
 PROJECT_LABEL|PROJECT_LABEL=""
 PROJECT_LABEL|PROJECT_LABEL='My {{label}}; rm'
+IMAGE_OWNER|IMAGE_OWNER="Bad Owner"
+IMAGE_OWNER|IMAGE_OWNER="UPPER"
+IMAGE_OWNER|IMAGE_OWNER='x$(id)'
 CASES
 
 # ---- 3. nothing in the environment can stand in for a missing parameter -----------------------------------------------------------

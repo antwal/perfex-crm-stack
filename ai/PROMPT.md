@@ -40,6 +40,7 @@ Parameters:
 | TOOLS_HOST    |       |
 | SSH_ALIAS     |       |
 | REMOTE_ROOT   |       |
+| IMAGE_OWNER   |       |
 | DEST_DIR      | tools/docker |
 | SYNC_DIR      | modules |
 | MODULES_DIR   | modules |
@@ -82,6 +83,7 @@ Parameters:
 | SSH_ALIAS     |       |
 | REMOTE_ROOT   |       |
 | WEB_PHP_VERSION | 8.4 |
+| IMAGE_OWNER   |       |
 | DEST_DIR      | tools/docker |
 | SYNC_DIR      | modules |
 | MODULES_DIR   | modules |

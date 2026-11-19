@@ -8,7 +8,8 @@
 # This template ships no part of Perfex CRM and never will: it is proprietary software, bring your own licensed copy.
 # The folder or zip you pass is only read. Afterwards: open the application URL, complete the installation wizard in the
 # browser (you create the administrator there), then remove the install folder:  run.sh 'rm -rf /app/install'
-# Only the first target (/app) is handled; a second instance (/app-extra) is copied by hand with rsync, as README.md shows.
+# Only the first target (/app) is handled; a second instance (/app-extra, see stack/web-extra.yml) is copied by hand with
+# rsync over the SSH alias into /app-extra, which the tools container mounts.
 # Values come from stack.conf, not from this file.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd -P)"

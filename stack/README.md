@@ -10,6 +10,8 @@ neutral default, and the project folder that `render.sh` makes ships a `portaine
 | `web/` | the build context of the web image: `Dockerfile`, `entrypoint.sh`, `apache/000-default.conf`, `php/uploads.ini` |
 | `tools.Dockerfile`, `tools/` | the build of the tools image: `entrypoint.sh` and `sshd_config` |
 
+## Build the two images
+
 There is no `build:` in the compose file: Portainer cannot build for remote environments. **You build the two images on the
 server first**, as root, from a copy of this folder (the project README prints these commands with your values; `doctor.sh --guide`
 too). The build context, the folder Docker copies files from, is not the same for the two images: the web image is built
@@ -49,8 +51,10 @@ Build arguments: web `PHP_VERSION` (8.4); tools `PHP_VERSIONS` (default `8.1 8.2
 for Node): the comments at the top of each Dockerfile say how to update them. If the tools build stops because the PHP package
 repository (Sury) does not have a version yet, drop it from `PHP_VERSIONS` (and from `TOOLS_PHP_VERSIONS` in your parameters).
 After you change a file of the context, copy it again with `rsync --delete` before rebuilding: a `COPY` layer marked `CACHED`
-means the server still has the old file. When both builds are done, `docker images` lists the two tags; Portainer does not
-recreate a container whose image tag did not change, so after a rebuild press **Recreate** with "Re-pull image" off.
+means the server still has the old file. When both builds are done, `docker images` lists the two tags. After a rebuild
+under the same tag, *Update the stack* with "Re-pull image" **off** recreates the container on the new image (it did on
+19 November 2026; check with `docker inspect --format '{{.Image}}' <container>` against `docker images --no-trunc`); if the
+container keeps the old image, open it and press **Recreate**, again with "Re-pull image" off.
 
 ## What to paste, and the variables
 
