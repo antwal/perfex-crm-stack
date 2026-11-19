@@ -17,7 +17,7 @@ if [ "${1:-}" = "--guide" ]; then
     db_example="${STACK_NAME//-/_}"
     cat <<EOT
 Setup of the stack "$STACK_NAME": the steps with your values (README.md has the explanations).
-Run the Mac steps from the project root:   cd $ROOT
+Run the Mac steps from the project root:   cd "$ROOT"
 "SERVER" is how YOU log in to the server as root; an AI agent has no such access.
 
 1. Mac: a key and an alias
@@ -40,6 +40,7 @@ Run the Mac steps from the project root:   cd $ROOT
    cd $REMOTE_ROOT/build
    docker build -f web/Dockerfile --build-arg PHP_VERSION=$WEB_PHP_VERSION -t $WEB_IMAGE web
    docker build -f tools.Dockerfile --build-arg PHP_VERSIONS="$TOOLS_PHP_VERSIONS" --build-arg TOOLS_NODE=$TOOLS_NODE -t $TOOLS_IMAGE .
+   If you set WEB_IMAGE to an image of your own, skip the first build: that image does not come from web/Dockerfile, you provide it under that name.
 
 4. MariaDB, with its administrator account: a database (utf8mb4_unicode_ci) and a user with all privileges on it only,
    for example $db_example for both (README step 4 has the SQL). Keep the password out of chat and files.

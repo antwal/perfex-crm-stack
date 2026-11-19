@@ -23,7 +23,7 @@ for it: it prepares the commands, you run them. The same steps, with your values
 Run the Mac steps from the **project root**, the folder this was rendered for:
 
 ```bash
-cd {{PROJECT_ROOT_ABS}}
+cd "{{PROJECT_ROOT_ABS}}"
 ```
 
 The template (with `stack/`) is at `{{TEMPLATE_REL}}` from there.
@@ -91,7 +91,9 @@ Each `docker build` names its Dockerfile with `-f` and ends with the build conte
 copies `tools/sshd_config` and `tools/entrypoint.sh`). The names after `-t` are `WEB_IMAGE` and `TOOLS_IMAGE` of your parameters
 (`[<IMAGE_OWNER>/]perfex-web:<PHP version>` and `[<IMAGE_OWNER>/]perfex-tools:<first>-<last PHP version>`).
 
-The web image (Apache + PHP-FPM {{WEB_PHP_VERSION}}, with the extensions Perfex CRM needs):
+The web image (Apache + PHP-FPM {{WEB_PHP_VERSION}}, with the extensions Perfex CRM needs). If you set `WEB_IMAGE` to an image of
+your own, skip this build: that image does not come from `web/Dockerfile`, you provide it yourself (built on the server, or
+pulled from your registry) under the name `{{WEB_IMAGE}}`:
 
 ```bash
 docker build -f web/Dockerfile --build-arg PHP_VERSION={{WEB_PHP_VERSION}} -t {{WEB_IMAGE}} web
@@ -173,7 +175,7 @@ If your modules or an API need the `Authorization` header (Bearer tokens, Basic)
 
 ## 2. Daily use (from the project root)
 
-Every command below is relative to the project root: `cd {{PROJECT_ROOT_ABS}}` first. The scripts take their values from
+Every command below is relative to the project root: `cd "{{PROJECT_ROOT_ABS}}"` first. The scripts take their values from
 `stack.conf`; `STACK_SSH=<alias>` in the environment points them at another stack rendered with the same layout.
 
 | Command | What it does |

@@ -10,6 +10,39 @@ neutral default, and the project folder that `render.sh` makes ships a `portaine
 | `web/` | the build context of the web image: `Dockerfile`, `entrypoint.sh`, `apache/000-default.conf`, `php/uploads.ini` |
 | `tools.Dockerfile`, `tools/` | the build of the tools image: `entrypoint.sh` and `sshd_config` |
 
+## The SSH key and the alias (on your Mac, before the server steps)
+
+The tools container accepts one user, `www-data`, with a public key only: the key pair is made on your Mac, and its public
+line goes into `<REMOTE_ROOT>/tools/authorized_keys` on the server ("The files that must exist on the server", below).
+`render.sh` writes these two commands with your values in the project README (step 1), and `doctor.sh --guide` prints them;
+here they are for whoever uses `stack/` alone.
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/myproject-test -C myproject-test -N ""
+```
+
+```bash
+cat >> ~/.ssh/config <<'EOT'
+
+Host myproject-test
+    HostName myproject-tools.perfexcrm.docker
+    Port 2222
+    User www-data
+    IdentityFile ~/.ssh/myproject-test
+    IdentitiesOnly yes
+EOT
+```
+
+```bash
+cat ~/.ssh/myproject-test.pub
+```
+
+The line it prints goes into `authorized_keys` (`myproject-test` is the `SSH_ALIAS` of `params.example.env`: use yours).
+`HostName` is your `TOOLS_HOST`; `Port` is `SSH_PORT` if you set it, or the host port if you publish one ("If your machine
+does not reach the Docker network", below). The private key never leaves the Mac and is never pasted into a chat.
+One key per alias keeps things simple; an existing key works too, with its path in `IdentityFile` and its public line in
+`authorized_keys`.
+
 ## Build the two images
 
 There is no `build:` in the compose file: Portainer cannot build for remote environments. **You build the two images on the
@@ -117,47 +150,18 @@ with all privileges **on that database only**, with a password you choose. The f
 variables above and go nowhere else. For example:
 
 ```sql
-CREATE DATABASE perfex_myproject CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'perfex_myproject'@'%' IDENTIFIED BY '<a password you choose>';
-GRANT ALL PRIVILEGES ON perfex_myproject.* TO 'perfex_myproject'@'%';
+CREATE DATABASE myproject CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'myproject'@'%' IDENTIFIED BY '<a password you choose>';
+GRANT ALL PRIVILEGES ON myproject.* TO 'myproject'@'%';
 FLUSH PRIVILEGES;
 ```
 
 `'%'` lets the containers of the Docker network connect; put that network's subnet in its place (`'10.0.0.%'`) to narrow it.
 
-## The SSH key and the alias (on your Mac, before the server steps)
+## The files that must exist on the server before the stack starts
 
-The tools container accepts one user, `www-data`, with a public key only: the key pair is made on your Mac, and its public
-line goes into `<REMOTE_ROOT>/tools/authorized_keys` on the server (below). `render.sh` writes these two commands with your
-values in the project README (step 1), and `doctor.sh --guide` prints them; here they are for whoever uses `stack/` alone.
-
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/myproject-test -C myproject-test -N ""
-```
-
-```bash
-cat >> ~/.ssh/config <<'EOT'
-
-Host myproject-test
-    HostName myproject-tools.perfexcrm.docker
-    Port 2222
-    User www-data
-    IdentityFile ~/.ssh/myproject-test
-    IdentitiesOnly yes
-EOT
-```
-
-```bash
-cat ~/.ssh/myproject-test.pub
-```
-
-The line it prints goes into `authorized_keys` (`myproject-test` is the `SSH_ALIAS` of `params.example.env`: use yours). `HostName` is your `TOOLS_HOST`; `Port` is `SSH_PORT` if you
-set it, or the host port if you publish one (above). The private key never leaves the Mac and is never pasted into a chat.
-One key per alias keeps things simple; an existing key works too, with its path in `IdentityFile` and its public line in
-`authorized_keys`.
-
-**The files that must exist on the server before the stack starts:** `<REMOTE_ROOT>/tools/authorized_keys` (a file with the
-public line printed above) and the folders `app`, `repo`, `tools/hostkeys`. If a path is missing Docker creates a *folder* with that name, and the mount
+`<REMOTE_ROOT>/tools/authorized_keys` (a file with the public line of the key made in "The SSH key and the alias", above) and
+the folders `app`, `repo`, `tools/hostkeys`. If a path is missing Docker creates a *folder* with that name, and the mount
 fails or misleads. Same for `<REMOTE_ROOT>/web/uploads.ini` if you uncomment its volume.
 
 ## A second web instance

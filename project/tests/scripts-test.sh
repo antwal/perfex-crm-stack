@@ -27,7 +27,9 @@ sed -e 's#^PROJECT_ROOT_REL=.*#PROJECT_ROOT_REL=".."#' -e 's#^SYNC_DIR=.*#SYNC_D
 CALLS="$WORK/calls"
 # The fakes record every call. ssh prints STACK_TEST_SSH_OUT (or the lines of the file STACK_TEST_SSH_REPORT when it is asked
 # to run a script) and exits with STACK_TEST_SSH_STATUS, or with STACK_TEST_LOCKED_STATUS for the calls that go through
-# locked.sh; curl prints STACK_TEST_CURL_OUT and exits with STACK_TEST_CURL_STATUS.
+# locked.sh (the command starts with "bash " and names locked.sh), or with STACK_TEST_PROBE_STATUS for the probe that asks
+# whether locked.sh is on the server ("test -f ..."): 1 means "it is not"; curl prints STACK_TEST_CURL_OUT and exits with
+# STACK_TEST_CURL_STATUS.
 for tool in ssh rsync curl; do
     cat > "$WORK/bin/$tool" <<'FAKE'
 #!/usr/bin/env bash
@@ -40,7 +42,10 @@ cat > "$STACK_TEST_CALLS.stdin.$n"
 case "$name" in
     ssh)
         status="${STACK_TEST_SSH_STATUS:-0}"
-        case "$*" in *locked.sh*) status="${STACK_TEST_LOCKED_STATUS:-$status}" ;; esac
+        case "${2:-}" in
+            "bash "*locked.sh*) status="${STACK_TEST_LOCKED_STATUS:-$status}" ;;
+            "test -f "*) status="${STACK_TEST_PROBE_STATUS:-$status}" ;;
+        esac
         case "$*" in
             *"bash -s --"*) [ -z "${STACK_TEST_SSH_REPORT:-}" ] || cat "$STACK_TEST_SSH_REPORT" ;;
             *) [ -z "${STACK_TEST_SSH_OUT:-}" ] || printf '%s\n' "$STACK_TEST_SSH_OUT" ;;
@@ -151,6 +156,35 @@ if [ -f "$WORK/perfex.zip" ]; then
     else
         bad "install-perfex.sh: a zip was not handled (status $STATUS): $(cat "$WORK/out")"
     fi
+fi
+
+# ---- ensure_locked_sh (run.sh): locked.sh already on the server, or missing --------------------------------------------------------
+echo "--- run.sh and the copy of locked.sh"
+sh_run run.sh 'echo hi'
+if [ "$STATUS" -eq 0 ] && [ "$(wc -l < "$CALLS" | tr -d ' ')" -eq 2 ] \
+    && [ "$(sed -n 1p "$CALLS")" = "ssh [$SSH_ALIAS] [test -f $LOCKED_SH]" ] \
+    && [ "$(sed -n 2p "$CALLS")" = "ssh [$SSH_ALIAS] [bash $LOCKED_SH echo\\ hi]" ]; then
+    good "run.sh: locked.sh is on the server, so the probe is followed by the command and by no copy"
+else
+    bad "run.sh: with locked.sh in place the calls were not probe + command (status $STATUS): $(cat "$CALLS")"
+fi
+STACK_TEST_PROBE_STATUS=1 sh_run run.sh 'echo hi'
+if [ "$STATUS" -eq 0 ] && [ "$(wc -l < "$CALLS" | tr -d ' ')" -eq 4 ] \
+    && [ "$(sed -n 1p "$CALLS")" = "ssh [$SSH_ALIAS] [test -f $LOCKED_SH]" ] \
+    && [ "$(sed -n 2p "$CALLS")" = "ssh [$SSH_ALIAS] [mkdir -p $(dirname "$LOCKED_SH")]" ] \
+    && [ "$(sed -n 3p "$CALLS")" = "rsync [-az] [-e] [ssh] [$WORK/docker/locked.sh] [$SSH_ALIAS:$LOCKED_SH]" ] \
+    && [ "$(sed -n 4p "$CALLS")" = "ssh [$SSH_ALIAS] [bash $LOCKED_SH echo\\ hi]" ] \
+    && grep -q 'locked.sh put on the server' "$WORK/out"; then
+    good "run.sh: locked.sh missing on the server: probe, mkdir, rsync of locked.sh, then the command, in that order"
+else
+    bad "run.sh: the copy of a missing locked.sh did not go probe, mkdir, rsync, command (status $STATUS): $(cat "$CALLS")"
+fi
+# a failing locked job must not be taken for a missing locked.sh: the probe is not a call through locked.sh
+STACK_TEST_LOCKED_STATUS=1 sh_run run.sh 'false'
+if [ "$STATUS" -eq 1 ] && [ "$(wc -l < "$CALLS" | tr -d ' ')" -eq 2 ] && ! called "rsync"; then
+    good "run.sh: the status of the locked job (1) is not the answer of the probe, so locked.sh is not copied again"
+else
+    bad "run.sh: a failing job was mixed up with the probe (status $STATUS): $(cat "$CALLS")"
 fi
 
 # ---- doctor.sh -----------------------------------------------------------------------------------------------------------------

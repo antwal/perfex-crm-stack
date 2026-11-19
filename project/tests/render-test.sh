@@ -106,6 +106,9 @@ PROJECT_LABEL|PROJECT_LABEL='My {{label}}; rm'
 IMAGE_OWNER|IMAGE_OWNER="Bad Owner"
 IMAGE_OWNER|IMAGE_OWNER="UPPER"
 IMAGE_OWNER|IMAGE_OWNER='x$(id)'
+IMAGE_OWNER|IMAGE_OWNER="a"
+IMAGE_OWNER|IMAGE_OWNER="-owner"
+IMAGE_OWNER|IMAGE_OWNER="owner/"
 CASES
 
 # ---- 3. nothing in the environment can stand in for a missing parameter -----------------------------------------------------------
@@ -165,6 +168,55 @@ mkparams noai 'INCLUDE_AI="0"'
 R2="$WORK/root with space"; mkdir -p "$R2"
 bash "$RENDER" "$WORK/p/noai.env" "$R2" > "$WORK/out" 2>&1; st=$?
 if [ "$st" -eq 0 ] && [ ! -e "$R2/${EXAMPLE_DEST:-tools/docker}/ai" ] && [ -f "$R2/${EXAMPLE_DEST:-tools/docker}/stack.conf" ]; then good "INCLUDE_AI=0 leaves out ai/, and a root with a space works"; else bad "INCLUDE_AI=0 or the root with a space failed (status $st): $(cat "$WORK/out")"; fi
+
+# ---- 6. image names, the list of PHP versions, the path of the template -----------------------------------------------------------------
+echo "--- images, PHP versions, template path"
+DEST_OF_EXAMPLE="${EXAMPLE_DEST:-tools/docker}"
+render_conf() { # render_conf <name> [<line> ...]: renders the example plus the lines into $WORK/r-<name>; sets STATUS and CONF (its stack.conf)
+    local name="$1"; shift
+    mkparams "$name" "$@"
+    rm -rf "$WORK/r-$name"; mkdir -p "$WORK/r-$name"
+    bash "$RENDER" "$WORK/p/$name.env" "$WORK/r-$name" > "$WORK/out" 2>&1; STATUS=$?
+    CONF="$WORK/r-$name/$DEST_OF_EXAMPLE/stack.conf"
+}
+conf_has() { grep -qxF -- "$1" "$CONF"; }
+
+render_conf noowner
+if [ "$STATUS" -eq 0 ] && conf_has 'WEB_IMAGE="perfex-web:8.4"' && conf_has 'TOOLS_IMAGE="perfex-tools:8.1-8.5"'; then good "no IMAGE_OWNER: the images are perfex-web:8.4 and perfex-tools:8.1-8.5"; else bad "the default image names are wrong (status $STATUS): $(cat "$WORK/out")"; fi
+render_conf owner 'IMAGE_OWNER="myowner"'
+if [ "$STATUS" -eq 0 ] && conf_has 'WEB_IMAGE="myowner/perfex-web:8.4"' && conf_has 'TOOLS_IMAGE="myowner/perfex-tools:8.1-8.5"'; then good "IMAGE_OWNER=myowner: stack.conf carries myowner/perfex-web:8.4 and myowner/perfex-tools:8.1-8.5"; else bad "IMAGE_OWNER did not prefix the images (status $STATUS): $(cat "$WORK/out")"; fi
+if [ "$STATUS" -eq 0 ] && grep -qxF 'WEB_IMAGE=myowner/perfex-web:8.4' "$WORK/r-owner/$DEST_OF_EXAMPLE/portainer.env" && grep -qxF 'TOOLS_IMAGE=myowner/perfex-tools:8.1-8.5' "$WORK/r-owner/$DEST_OF_EXAMPLE/portainer.env"; then good "IMAGE_OWNER=myowner: portainer.env carries the same two names"; else bad "portainer.env does not carry the prefixed image names"; fi
+render_conf registry 'IMAGE_OWNER="registry.example.com/team"'
+if [ "$STATUS" -eq 0 ] && conf_has 'WEB_IMAGE="registry.example.com/team/perfex-web:8.4"'; then good "IMAGE_OWNER can be a registry with a path"; else bad "a registry prefix was not applied (status $STATUS): $(cat "$WORK/out")"; fi
+render_conf ownover 'IMAGE_OWNER="myowner"' 'WEB_IMAGE="mine/web:1"'
+if [ "$STATUS" -eq 0 ] && conf_has 'WEB_IMAGE="mine/web:1"' && conf_has 'TOOLS_IMAGE="myowner/perfex-tools:8.1-8.5"'; then good "WEB_IMAGE overrides the name of the web image only"; else bad "WEB_IMAGE did not override (status $STATUS): $(cat "$WORK/out")"; fi
+
+# the blanks of a list of versions are squeezed (a leading blank used to give the tag perfex-tools:-8.3), and a single version names both ends
+render_conf blanks 'TOOLS_PHP_VERSIONS="  8.3   8.4 "' 'MATRIX_PHP_VERSIONS="8.3 8.4"'
+if [ "$STATUS" -eq 0 ] && conf_has 'TOOLS_PHP_VERSIONS="8.3 8.4"' && conf_has 'TOOLS_IMAGE="perfex-tools:8.3-8.4"'; then good "blanks in TOOLS_PHP_VERSIONS are squeezed: the list is \"8.3 8.4\" and the tag perfex-tools:8.3-8.4"; else bad "blanks in TOOLS_PHP_VERSIONS were not squeezed (status $STATUS): $(cat "$WORK/out") / $(grep -E '^TOOLS_' "$CONF")"; fi
+render_conf tabs "TOOLS_PHP_VERSIONS=\"8.3$(printf '\t')8.4\"" 'MATRIX_PHP_VERSIONS="8.3 8.4"'
+if [ "$STATUS" -eq 0 ] && conf_has 'TOOLS_IMAGE="perfex-tools:8.3-8.4"' && grep -q 'PHP_VERSIONS="8.3 8.4"' "$WORK/r-tabs/$DEST_OF_EXAMPLE/README.md"; then good "a tab between versions becomes one blank, in stack.conf and in the build command of the README"; else bad "a tab in TOOLS_PHP_VERSIONS was kept (status $STATUS)"; fi
+render_conf oneversion 'TOOLS_PHP_VERSIONS="8.4"' 'MATRIX_PHP_VERSIONS="8.4"'
+if [ "$STATUS" -eq 0 ] && conf_has 'TOOLS_IMAGE="perfex-tools:8.4-8.4"'; then good "a single PHP version gives the tag perfex-tools:8.4-8.4 (always <first>-<last>)"; else bad "the tag of a single version is not <v>-<v> (status $STATUS): $(cat "$WORK/out") / $(grep -E '^TOOLS_IMAGE' "$CONF")"; fi
+mkparams blankonly 'TOOLS_PHP_VERSIONS="   "'
+bash "$RENDER" --check "$WORK/p/blankonly.env" > "$WORK/out" 2>&1; st=$?
+if [ "$st" -ne 0 ] && grep -q 'TOOLS_PHP_VERSIONS' "$WORK/out"; then good "a TOOLS_PHP_VERSIONS made of blanks is refused, by name"; else bad "a blank TOOLS_PHP_VERSIONS was accepted (status $st): $(cat "$WORK/out")"; fi
+
+# the template folder, seen from the project root, goes into stack.conf: a plain relative path, ".." at the start allowed
+copytpl() { # copytpl <destination>: the files render.sh needs, in another folder
+    mkdir -p "$1"; cp "$TEMPLATE_DIR/render.sh" "$1/"; cp -R "$TEMPLATE_DIR/project" "$1/project"
+    if [ -d "$TEMPLATE_DIR/ai" ]; then cp -R "$TEMPLATE_DIR/ai" "$1/ai"; fi
+}
+copytpl "$WORK/tpl with space"
+mkdir -p "$WORK/root-ts"
+bash "$WORK/tpl with space/render.sh" "$WORK/p/good.env" "$WORK/root-ts" > "$WORK/out" 2>&1; st=$?
+if [ "$st" -ne 0 ] && grep -q 'TEMPLATE_REL' "$WORK/out" && [ -z "$(ls -A "$WORK/root-ts")" ]; then good "a template whose path from the root has a blank is refused by name, and nothing is written"; else bad "a template path with a blank was accepted or left files (status $st): $(cat "$WORK/out")"; fi
+bash "$WORK/tpl with space/render.sh" --check "$WORK/p/good.env" > "$WORK/out" 2>&1; st=$?
+if [ "$st" -ne 0 ] && grep -q 'TEMPLATE_REL' "$WORK/out"; then good "--check refuses it too"; else bad "--check accepted a template path with a blank (status $st)"; fi
+copytpl "$WORK/tpl-ok"
+mkdir -p "$WORK/root-ok"
+bash "$WORK/tpl-ok/render.sh" "$WORK/p/good.env" "$WORK/root-ok" > "$WORK/out" 2>&1; st=$?
+if [ "$st" -eq 0 ] && grep -qxF 'TEMPLATE_REL="../tpl-ok"' "$WORK/root-ok/$DEST_OF_EXAMPLE/stack.conf"; then good "a template next to the project (TEMPLATE_REL ../tpl-ok) is accepted, with the leading .."; else bad "a template next to the root was refused or recorded wrongly (status $st): $(cat "$WORK/out")"; fi
 
 [ "$fail" -eq 0 ] && echo "=== render-test: all ok ===" || echo "=== render-test: FAILED ==="
 exit "$fail"

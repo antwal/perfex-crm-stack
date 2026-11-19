@@ -54,11 +54,22 @@ set -u
 : "${DOCKER_NETWORK:=containers}" "${TZ:=UTC}" "${WEB_PHP_VERSION:=8.4}"
 : "${APP_URL:=http://${APP_HOST:-}}"
 : "${TOOLS_PHP_VERSIONS:=8.1 8.2 8.3 8.4 8.5}" "${TOOLS_NODE:=0}" "${PASS_AUTHORIZATION:=0}"
+# the words of a list, joined by single blanks: a leading blank, a tab or a double blank in the parameter file must not
+# reach the image tag, stack.conf or the docker build command
+_squeeze() { # _squeeze <name>
+    local _w _out=""
+    set -f
+    for _w in ${!1}; do _out="${_out:+$_out }$_w"; done
+    set +f
+    printf -v "$1" '%s' "$_out"
+}
+_squeeze TOOLS_PHP_VERSIONS
 # image names: [<IMAGE_OWNER>/]perfex-web:<WEB_PHP_VERSION> and [<IMAGE_OWNER>/]perfex-tools:<first>-<last of TOOLS_PHP_VERSIONS>
+# (always both ends, so a single version gives perfex-tools:8.4-8.4)
 : "${IMAGE_OWNER=}"
 _first_php="${TOOLS_PHP_VERSIONS%% *}"; _last_php="$_first_php"
 for _v in $TOOLS_PHP_VERSIONS; do _last_php="$_v"; done
-_tools_tag="$_first_php"; [ "$_last_php" = "$_first_php" ] || _tools_tag="$_first_php-$_last_php"
+_tools_tag="$_first_php-$_last_php"
 : "${WEB_IMAGE:=${IMAGE_OWNER:+$IMAGE_OWNER/}perfex-web:${WEB_PHP_VERSION}}" "${TOOLS_IMAGE:=${IMAGE_OWNER:+$IMAGE_OWNER/}perfex-tools:$_tools_tag}"
 : "${TOOLS_CPUS:=2}" "${TOOLS_MEM:=2g}" "${TOOLS_PIDS:=512}"
 : "${WEB_EXTRA_PHP_VERSION=}" "${WEB_EXTRA_NAME=}" "${WEB_EXTRA_HOST=}"
@@ -172,6 +183,11 @@ for _n in DEFAULT_PHP STATIC_PHP DEPLOY_PHP; do
 done
 match MAILPIT_URL "$_url" opt; match MAILPIT_SMTP_HOST "$_host" opt; match MAILPIT_SMTP_PORT '^[0-9]{1,5}$' opt
 
+# where the template is, seen from the project root: stack.conf and the generated documents carry it in commands, so it is
+# a plain relative path (leading ".." allowed: the template may sit above the project root), without blanks or special characters
+TEMPLATE_REL="$(perl -MFile::Spec -e 'print File::Spec->abs2rel($ARGV[0], $ARGV[1])' "$_tpl" "$_root")"
+[[ "$TEMPLATE_REL" =~ ^[A-Za-z0-9._][A-Za-z0-9._/-]*$ ]] || err "TEMPLATE_REL=\"$TEMPLATE_REL\" (the template folder seen from the project root) must be a relative path of letters, digits and . _ - / only: move the template, or the project, so that the path between them has no blank or special character"
+
 # the destination is never inside the template (stack/ and project/ are the sources)
 _dest="$_root/$DEST_DIR"
 case "$_dest/" in "$_tpl"/*) err "the destination $_dest is inside the template folder: use the root of your own project" ;; esac
@@ -191,7 +207,6 @@ LOCKED_SH="/repo/$DEST_DIR/locked.sh"
 DB_NAME_EXAMPLE="${STACK_NAME//-/_}"
 # the image of the optional second web instance follows the same naming; empty when the instance is not used
 WEB_EXTRA_IMAGE="${WEB_EXTRA_PHP_VERSION:+${IMAGE_OWNER:+$IMAGE_OWNER/}perfex-web:$WEB_EXTRA_PHP_VERSION}"
-TEMPLATE_REL="$(perl -MFile::Spec -e 'print File::Spec->abs2rel($ARGV[0], $ARGV[1])' "$_tpl" "$_root")"
 RENDER_DATE="$(date +%F)"
 RENDER_SOURCE="$(basename "$_params")"
 PROJECT_ROOT_ABS="$_root"
