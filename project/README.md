@@ -152,8 +152,9 @@ puts it there together with your code (deploy and the matrix run it first), and 
 
 ### Step 7, the application
 
-Perfex CRM is proprietary: **bring your own licensed copy**, this template contains none of it. Copy your folder (the one with
-`index.php` and `application/`) or your zip into `/app`:
+Perfex CRM is proprietary: **bring your own licensed copy**, this template contains none of it; if you do not own a license
+yet, buy it on CodeCanyon: https://codecanyon.net/item/perfex-powerful-open-source-crm/14013737. Copy your folder (the one
+with `index.php` and `application/`) or your zip into `/app`:
 
 ```bash
 {{DEST_REL}}/install-perfex.sh <your Perfex folder or zip>

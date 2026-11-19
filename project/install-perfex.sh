@@ -5,7 +5,8 @@
 #   zip      the zip you downloaded; the application folder is found inside it (up to two levels down)
 #   --force  copy even if /app is not empty (files are overwritten, nothing is deleted: an installed instance keeps its
 #            configuration, which the zip does not contain)
-# This template ships no part of Perfex CRM and never will: it is proprietary software, bring your own licensed copy.
+# This template ships no part of Perfex CRM and never will: it is proprietary software, bring your own licensed copy
+# (if you do not own a license yet, buy it at https://codecanyon.net/item/perfex-powerful-open-source-crm/14013737).
 # The folder or zip you pass is only read. Afterwards: open the application URL, complete the installation wizard in the
 # browser (you create the administrator there), then remove the install folder:  run.sh 'rm -rf /app/install'
 # Only the first target (/app) is handled; a second instance (/app-extra, see stack/web-extra.yml) is copied by hand with

@@ -19,8 +19,8 @@ from `web/` (its Dockerfile copies `apache/`, `php/` and `entrypoint.sh` from th
 whole (it copies `tools/sshd_config` and `tools/entrypoint.sh`).
 
 ```bash
-# on your Mac, from the folder that holds stack_docker/: this folder goes to the server as <REMOTE_ROOT>/build/
-rsync -av --delete stack_docker/stack/ root@SERVER:/srv/docker/perfexcrm/myproject/build/
+# on your Mac, from the folder that holds perfex-crm-stack/: this folder goes to the server as <REMOTE_ROOT>/build/
+rsync -av --delete perfex-crm-stack/stack/ root@SERVER:/srv/docker/perfexcrm/myproject/build/
 ```
 
 On the server, as root, go to that copy first:

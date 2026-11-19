@@ -107,7 +107,7 @@ fi
 
 # 3. Copy. The marker is written first and protected from --delete, so an interrupted copy leaves the folder managed.
 mkdir -p "$dest"
-printf 'created by the stack_docker deploy script: deploy.sh may overwrite this folder\n' > "$dest/$managed"
+printf 'created by the Perfex CRM Stack Docker deploy script: deploy.sh may overwrite this folder\n' > "$dest/$managed"
 ex=()
 set -f
 for e in $excludes; do ex+=(--exclude "$e"); done

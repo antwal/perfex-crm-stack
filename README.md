@@ -9,7 +9,8 @@ It also works for an AI agent with a shell (Claude Code or another): the agent g
 Portainer, the Docker socket or your database password. See `ai/`.
 
 **Perfex CRM is not part of this repository and never will be.** It is proprietary: you bring your own licensed copy
-(`install-perfex.sh` copies it to the server). The example module and its tests are written from scratch.
+(`install-perfex.sh` copies it to the server); if you do not own a license yet, buy it on CodeCanyon:
+https://codecanyon.net/item/perfex-powerful-open-source-crm/14013737. The example module and its tests are written from scratch.
 
 ## 1. The reference infrastructure
 
@@ -34,7 +35,7 @@ The template documents the setup it was built on, as a reference. Adapt it, or k
 ## 2. What is in the folder
 
 ```
-stack_docker/
+perfex-crm-stack/
 ├── README.md              this file
 ├── LICENSE                MIT
 ├── params.example.env     every parameter, commented, with its neutral default
@@ -59,13 +60,37 @@ stack_docker/
 
 ## 3. Quick start
 
-Put this folder in your project (a copy, a clone, a submodule), then from the **project root**:
+Put the template in your project as `perfex-crm-stack/`, the name a clone gets (the paths below use it; with another name,
+change them). From the **project root**, one of the two:
 
 ```bash
-cp stack_docker/params.example.env stack_docker/params.env
-$EDITOR stack_docker/params.env                              # names, DNS names, folders: at least the six REQUIRED values
-stack_docker/render.sh --check stack_docker/params.env       # validates everything, writes nothing
-stack_docker/render.sh stack_docker/params.env .             # writes ./tools/docker/ (DEST_DIR): scripts, stack.conf, portainer.env, README
+git clone https://github.com/antwal/perfex-crm-stack.git
+```
+
+```bash
+git submodule add https://github.com/antwal/perfex-crm-stack.git perfex-crm-stack
+```
+
+A clone or a copy is not part of your repository: ignore it in your `.gitignore`, together with the temporary folder of
+the scripts (`LOCAL_TMP_DIR`, `.tmp` by default) and your copy of Perfex CRM if it sits in the project (the folder or the
+zip you give `install-perfex.sh`: it is proprietary and never goes in a repository). A submodule is recorded by git itself:
+do not ignore it.
+
+```gitignore
+/perfex-crm-stack/
+/.tmp/
+# your copy of Perfex CRM, folder or zip, by its real name
+/perfex-crm/
+/perfex_crm_*.zip
+```
+
+Then:
+
+```bash
+cp perfex-crm-stack/params.example.env perfex-crm-stack/params.env
+$EDITOR perfex-crm-stack/params.env                             # names, DNS names, folders: at least the six REQUIRED values
+perfex-crm-stack/render.sh --check perfex-crm-stack/params.env  # validates everything, writes nothing
+perfex-crm-stack/render.sh perfex-crm-stack/params.env .        # writes ./tools/docker/ (DEST_DIR): scripts, stack.conf, portainer.env, README
 ```
 
 `render.sh` refuses to write into a folder that is not empty unless you pass `--force`, and with `--force` it replaces only

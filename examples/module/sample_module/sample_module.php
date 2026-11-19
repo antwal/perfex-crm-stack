@@ -4,7 +4,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 /*
 Module Name: Sample Module
-Description: A minimal example module for the stack_docker template. It does nothing useful: it shows the shape a module needs to be deployed, tested on several PHP versions and checked against the test instance.
+Description: A minimal example module for the Perfex CRM Stack Docker template. It does nothing useful: it shows the shape a module needs to be deployed, tested on several PHP versions and checked against the test instance.
 Version: 0.1.0
 Requires at least: 3.4.0
 */

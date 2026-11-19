@@ -1,6 +1,6 @@
 {
     "name": "example/sample-module",
-    "description": "A minimal example module for the stack_docker template.",
+    "description": "A minimal example module for the Perfex CRM Stack Docker template.",
     "type": "project",
     "license": "MIT",
     "require": {
