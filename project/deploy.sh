@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Copies a module into the test instance in development mode (no zip) and installs its runtime dependencies.
 # Usage: deploy.sh [--adopt] <module> [<target>]
-#   module   a name from DEPLOY_MODULES of stack.conf; when that list is empty, any folder <SYNC_DIR>/<name>/<name>.php.
+#   module   a name from DEPLOY_MODULES of stack.conf; when that list is empty, any folder <SYNC_DIR>/<name>/<name>.php. Or a name
+#            from DEPLOY_EXTRA: a module that lives deeper, in <SYNC_DIR>/<folder>/ (which holds <name>.php); it is deployed as
+#            /<target>/<MODULES_DIR>/<name> like any other, with the same marker, --adopt and excludes.
 #   target   an application folder from APP_TARGETS (the first one is the default): /app, /app-extra.
 #   --adopt  take over a module folder that this stack did not create (see below).
 # What it does:
@@ -22,7 +24,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd -P)"
 # shellcheck source=lib.sh
 . "$HERE/lib.sh"
-usage() { sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; }
 
 ADOPT=0; MOD=""; TARGET=""; _n=0
 for _arg in "$@"; do
@@ -41,9 +43,23 @@ TARGET="${TARGET:-${APP_TARGETS%% *}}"
 
 # The module, the target and the alias end up in a command executed on the server: closed lists or a strict pattern.
 valid_module "$MOD" || die "invalid module name: \"$MOD\" (lowercase letters, digits and _, starting with a letter)"
+# The name is one of the modules (folder <SYNC_DIR>/<name>) or one of DEPLOY_EXTRA (a folder listed in stack.conf): SRC_REL is
+# where its source is, relative to SYNC_DIR. A name in both lists has two possible sources: refused.
 _allowed="$(deploy_module_names)"
+_extras="$(deploy_extra_names)"
+SRC_REL=""
 # shellcheck disable=SC2086
-in_list "$MOD" $_allowed || die "module not allowed: $MOD (allowed: ${_allowed:-none found})"
+if in_list "$MOD" $_allowed; then
+    # shellcheck disable=SC2086
+    if in_list "$MOD" $_extras; then die "ambiguous: $MOD is a module of $SYNC_DIR/ and also a name in DEPLOY_EXTRA of stack.conf"; fi
+    SRC_REL="$MOD"
+elif in_list "$MOD" $_extras; then
+    SRC_REL="$(deploy_extra_source "$MOD")"
+    # the server refuses any ".." in it: the Mac does too, before anything is copied
+    { valid_relpath "$SRC_REL" && [[ "$SRC_REL" != *..* ]]; } || die "invalid folder for $MOD in DEPLOY_EXTRA of stack.conf: \"$SRC_REL\""
+else
+    die "module not allowed: $MOD (allowed: ${_allowed:-none found}${_extras:+; in DEPLOY_EXTRA: $_extras})"
+fi
 valid_target "$TARGET" || die "invalid target: \"$TARGET\""
 # shellcheck disable=SC2086
 in_list "$TARGET" $APP_TARGETS || die "target not allowed: $TARGET (allowed: $APP_TARGETS)"
@@ -51,18 +67,24 @@ valid_php "$DEPLOY_PHP" || die "invalid DEPLOY_PHP in stack.conf: $DEPLOY_PHP"
 valid_relpath "$MODULES_DIR" allow-empty || die "invalid MODULES_DIR in stack.conf: $MODULES_DIR"
 [[ "$DEV_MARKER" =~ ^[A-Za-z0-9._-]*$ ]] || die "invalid DEV_MARKER in stack.conf: $DEV_MARKER"
 valid_globs "$DEPLOY_EXCLUDES" || die "invalid DEPLOY_EXCLUDES in stack.conf: $DEPLOY_EXCLUDES"
-[ -d "$REPO_DIR/$MOD" ] && [ ! -L "$REPO_DIR/$MOD" ] && [ -f "$REPO_DIR/$MOD/$MOD.php" ] \
-    || die "module $MOD not found in $REPO_DIR (expected $SYNC_DIR/$MOD/$MOD.php, not a symbolic link)"
+# no symbolic link on the way to the source (the last one included), and the init file in it
+_walk="$REPO_DIR"
+for _c in ${SRC_REL//\// }; do
+    _walk="$_walk/$_c"
+    [ ! -L "$_walk" ] || die "$SYNC_DIR/${_walk#"$REPO_DIR"/} is a symbolic link: not following it"
+done
+[ -d "$REPO_DIR/$SRC_REL" ] && [ -f "$REPO_DIR/$SRC_REL/$MOD.php" ] \
+    || die "module $MOD not found in $REPO_DIR (expected $SYNC_DIR/$SRC_REL/$MOD.php, not a symbolic link)"
 
 "$HERE/sync.sh"
 
 # The script runs on the server with the values as positional parameters (quoted with %q), never pasted into its text.
 # It checks them again: the server does not trust the Mac more than the Mac trusts free text.
 # STACK_SERVER_ROOT is empty on the server; tests/deploy-test.sh sets it to run this very text against a folder tree.
-_args="$(printf '%q %q %q %q %q %q %q %q' "$MOD" "$TARGET" "$DEPLOY_PHP" "$SYNC_DIR" "$MODULES_DIR" "$DEV_MARKER" "$ADOPT" "$DEPLOY_EXCLUDES")"
+_args="$(printf '%q %q %q %q %q %q %q %q %q' "$MOD" "$TARGET" "$DEPLOY_PHP" "$SYNC_DIR" "$MODULES_DIR" "$DEV_MARKER" "$ADOPT" "$DEPLOY_EXCLUDES" "$SRC_REL")"
 remote_locked "bash -s -- $_args" <<'REMOTE'
 set -euo pipefail
-mod="$1"; target="$2"; php="$3"; sync_dir="$4"; modules_dir="$5"; dev_marker="$6"; adopt="$7"; excludes="$8"
+mod="$1"; target="$2"; php="$3"; sync_dir="$4"; modules_dir="$5"; dev_marker="$6"; adopt="$7"; excludes="$8"; src_rel="$9"
 srv="${STACK_SERVER_ROOT:-}"
 managed=".stack-managed"
 fail() { echo "$1" >&2; exit "${2:-1}"; }
@@ -74,17 +96,23 @@ fail() { echo "$1" >&2; exit "${2:-1}"; }
 [[ -z "$modules_dir" || ( "$modules_dir" =~ ^[A-Za-z0-9_][A-Za-z0-9._/-]*$ && "$modules_dir" != *..* ) ]] || fail "invalid modules folder: $modules_dir"
 [[ "$dev_marker" =~ ^[A-Za-z0-9._-]*$ && "$dev_marker" != "." && "$dev_marker" != ".." && "$dev_marker" != "$managed" ]] || fail "invalid development marker: $dev_marker"
 [[ "$adopt" =~ ^[01]$ ]] || fail "invalid adopt flag: $adopt"
+[[ "$src_rel" =~ ^[A-Za-z0-9_][A-Za-z0-9._/-]*$ && "$src_rel" != *..* && "$src_rel" != *//* && "$src_rel" != */ ]] || fail "invalid source folder: $src_rel"
 set -f
 for e in $excludes; do [[ "$e" =~ ^[A-Za-z0-9._*?/-]+$ ]] || fail "invalid exclude pattern: $e"; done
 set +f
 
-src="$srv/repo/$sync_dir/$mod"
+src="$srv/repo/$sync_dir/$src_rel"
 app="$srv/$target"
 parent="$app${modules_dir:+/$modules_dir}"
 dest="$parent/$mod"
 [ -d "$app" ] || fail "target /$target is not mounted in the tools container"
 [ -d "$parent" ] || fail "the modules folder ${parent#"$srv"} does not exist: install the application first"
-{ [ -d "$src" ] && [ ! -L "$src" ]; } || fail "module not found on the server: /repo/$sync_dir/$mod (run sync.sh)"
+walk="$srv/repo/$sync_dir"
+for c in ${src_rel//\// }; do
+    walk="$walk/$c"
+    [ ! -L "$walk" ] || fail "${walk#"$srv"} is a symbolic link: not following it"
+done
+{ [ -d "$src" ] && [ ! -L "$src" ]; } || fail "module not found on the server: /repo/$sync_dir/$src_rel (run sync.sh)"
 
 # 1. The folder is checked BEFORE anything is written in the application.
 if [ -e "$dest" ] || [ -L "$dest" ]; then

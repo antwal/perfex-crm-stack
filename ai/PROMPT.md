@@ -48,6 +48,7 @@ Parameters:
 | SYNC_DIR      | modules |
 | MODULES_DIR   | modules |
 | DEPLOY_MODULES|       |
+| DEPLOY_EXTRA  |       |
 ```
 
 ## B. Build a new stack
@@ -96,6 +97,7 @@ Parameters:
 | SYNC_DIR      | modules |
 | MODULES_DIR   | modules |
 | DEPLOY_MODULES|       |
+| DEPLOY_EXTRA  |       |
 | CI_MODULES    |       |
 | MAILPIT_URL   |       |
 ```

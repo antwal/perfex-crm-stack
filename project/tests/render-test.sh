@@ -109,6 +109,23 @@ IMAGE_OWNER|IMAGE_OWNER='x$(id)'
 IMAGE_OWNER|IMAGE_OWNER="a"
 IMAGE_OWNER|IMAGE_OWNER="-owner"
 IMAGE_OWNER|IMAGE_OWNER="owner/"
+DEPLOY_EXTRA|DEPLOY_EXTRA="../x:mod"
+DEPLOY_EXTRA|DEPLOY_EXTRA="a//b:mod"
+DEPLOY_EXTRA|DEPLOY_EXTRA="a/b/:mod"
+DEPLOY_EXTRA|DEPLOY_EXTRA="a/b:Bad"
+DEPLOY_EXTRA|DEPLOY_EXTRA="a/b"
+DEPLOY_EXTRA|DEPLOY_EXTRA="a/b:alpha_mod a/c:alpha_mod"
+DEPLOY_EXTRA|DEPLOY_MODULES="alpha_mod"; DEPLOY_EXTRA="x/y:alpha_mod"
+DEPLOY_EXTRA|DEPLOY_EXTRA="x/y:sample_module"
+DEPLOY_EXTRA|DEPLOY_EXTRA="/abs/x:mod"
+DEPLOY_EXTRA|DEPLOY_EXTRA="a:b:c"
+DEPLOY_EXTRA|DEPLOY_EXTRA="a/*:mod"
+DEPLOY_EXTRA|DEPLOY_EXTRA='a/$(id):mod'
+DEPLOY_EXTRA|DEPLOY_EXTRA="a..b/c:mod"
+DEPLOY_EXTRA|DEPLOY_EXTRA=":mod"
+DEPLOY_EXTRA|DEPLOY_EXTRA="a/b:"
+DEPLOY_EXTRA|DEPLOY_EXTRA=".hidden/x:mod"
+DEPLOY_EXTRA|DEPLOY_EXTRA="a/b:m"
 CASES
 
 # ---- 3. nothing in the environment can stand in for a missing parameter -----------------------------------------------------------
@@ -209,6 +226,16 @@ if [ "$STATUS" -eq 0 ] && conf_has 'TOOLS_IMAGE="perfex-tools:8.4-8.4"'; then go
 mkparams blankonly 'TOOLS_PHP_VERSIONS="   "'
 bash "$RENDER" --check "$WORK/p/blankonly.env" > "$WORK/out" 2>&1; st=$?
 if [ "$st" -ne 0 ] && grep -q 'TOOLS_PHP_VERSIONS' "$WORK/out"; then good "a TOOLS_PHP_VERSIONS made of blanks is refused, by name"; else bad "a blank TOOLS_PHP_VERSIONS was accepted (status $st): $(cat "$WORK/out")"; fi
+
+# DEPLOY_EXTRA: a good value ends in stack.conf, is listed by --check, and an empty one is allowed (the example's)
+render_conf extra 'DEPLOY_EXTRA="alpha_mod/examples/alpha_notes:alpha_notes other/deep/folder:other_notes"'
+if [ "$STATUS" -eq 0 ] && conf_has 'DEPLOY_EXTRA="alpha_mod/examples/alpha_notes:alpha_notes other/deep/folder:other_notes"'; then good "DEPLOY_EXTRA with two pairs ends in stack.conf"; else bad "a good DEPLOY_EXTRA was refused or not recorded (status $STATUS): $(cat "$WORK/out")"; fi
+bash "$RENDER" --check "$WORK/p/extra.env" > "$WORK/out" 2>&1; st=$?
+if [ "$st" -eq 0 ] && grep -q 'deploy: sample_module; extra: alpha_notes other_notes; matrix' "$WORK/out"; then good "--check names the extra modules on its deploy line"; else bad "--check does not list the extra names (status $st): $(cat "$WORK/out")"; fi
+bash "$RENDER" --check "$WORK/p/good.env" > "$WORK/out" 2>&1; st=$?
+if [ "$st" -eq 0 ] && grep -q 'deploy: sample_module; matrix' "$WORK/out" && ! grep -q 'extra:' "$WORK/out"; then good "--check says nothing of extras when there are none"; else bad "--check printed an extra line with an empty DEPLOY_EXTRA: $(cat "$WORK/out")"; fi
+render_conf noextra
+if [ "$STATUS" -eq 0 ] && conf_has 'DEPLOY_EXTRA=""'; then good "an empty DEPLOY_EXTRA gives DEPLOY_EXTRA=\"\" in stack.conf"; else bad "DEPLOY_EXTRA is missing from stack.conf (status $STATUS)"; fi
 
 # the template folder, seen from the project root, goes into stack.conf: a plain relative path, ".." at the start allowed
 copytpl() { # copytpl <destination>: the files render.sh needs, in another folder

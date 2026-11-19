@@ -9,8 +9,9 @@
 # functions are the API of such scripts and keep their names and arguments until the next major version, a change being
 # announced in the CHANGELOG of the template: die, in_list, valid_host, valid_module, valid_ci_module, valid_target,
 # valid_php, valid_relpath, valid_globs, stack_load (it sets HERE, HOST, ROOT and REPO_DIR and loads stack.conf),
-# discover_modules, deploy_module_names, ci_module_names, remote_locked, ensure_locked_sh. Anything else in this file
-# (the *_RE patterns, a helper that is not in that list) is internal and may change without notice.
+# discover_modules, deploy_module_names, deploy_extra_names, deploy_extra_source, ci_module_names, remote_locked,
+# ensure_locked_sh. Anything else in this file (the *_RE patterns, a helper that is not in that list) is internal and may
+# change without notice.
 
 die() { echo "$*" >&2; exit 1; }
 
@@ -77,6 +78,32 @@ discover_modules() {
 # deploy_module_names: DEPLOY_MODULES when it is set (a closed list), else the modules found in REPO_DIR
 deploy_module_names() {
     if [ -n "${DEPLOY_MODULES:-}" ]; then echo "$DEPLOY_MODULES"; else discover_modules "$REPO_DIR" | tr '\n' ' '; fi
+}
+
+# deploy_extra_names: the names (the part after the colon) of the pairs <folder>:<name> in DEPLOY_EXTRA, blank-separated.
+# A word without a colon is not a pair and is left out. DEPLOY_EXTRA may be missing from a stack.conf written by version 0.1.
+deploy_extra_names() {
+    local p out=""
+    set -f
+    for p in ${DEPLOY_EXTRA:-}; do
+        case "$p" in *:*) out="${out:+$out }${p##*:}" ;; esac
+    done
+    set +f
+    echo "$out"
+}
+
+# deploy_extra_source <name>: the folder, relative to SYNC_DIR, that DEPLOY_EXTRA lists for that name; nothing if the name is
+# not there. The caller validates the folder (valid_relpath) before it uses it.
+deploy_extra_source() {
+    local p
+    set -f
+    for p in ${DEPLOY_EXTRA:-}; do
+        case "$p" in
+            *:*) if [ "${p##*:}" = "$1" ]; then echo "${p%:*}"; set +f; return 0; fi ;;
+        esac
+    done
+    set +f
+    return 0
 }
 
 # ci_module_names: CI_MODULES when it is set (a closed list), else the modules found in REPO_DIR

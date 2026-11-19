@@ -39,7 +39,7 @@ _root="$(cd "${_root:-$PWD}" && pwd -P)"
 _ALL_PARAMS="PROJECT_LABEL STACK_NAME DOCKER_NETWORK APP_HOST TOOLS_HOST APP_URL SSH_ALIAS REMOTE_ROOT TZ WEB_PHP_VERSION IMAGE_OWNER \
 WEB_IMAGE TOOLS_IMAGE TOOLS_PHP_VERSIONS TOOLS_NODE PASS_AUTHORIZATION TOOLS_CPUS TOOLS_MEM TOOLS_PIDS WEB_EXTRA_PHP_VERSION \
 WEB_EXTRA_NAME WEB_EXTRA_HOST DEST_DIR LOCAL_TMP_DIR SYNC_DIR LOCK_FILE SYNC_EXCLUDES MODULES_DIR APP_TARGETS DEPLOY_MODULES \
-DEPLOY_EXCLUDES DEV_MARKER CI_MODULES CI_CHECK_SCRIPT CI_STATIC_SCRIPT STATIC_TOOLS_DIR MATRIX_PHP_VERSIONS DEFAULT_PHP \
+DEPLOY_EXTRA DEPLOY_EXCLUDES DEV_MARKER CI_MODULES CI_CHECK_SCRIPT CI_STATIC_SCRIPT STATIC_TOOLS_DIR MATRIX_PHP_VERSIONS DEFAULT_PHP \
 STATIC_PHP DEPLOY_PHP MAILPIT_URL MAILPIT_SMTP_HOST MAILPIT_SMTP_PORT INCLUDE_AI"
 # shellcheck disable=SC2086
 unset $_ALL_PARAMS
@@ -75,7 +75,7 @@ _tools_tag="$_first_php-$_last_php"
 : "${WEB_EXTRA_PHP_VERSION=}" "${WEB_EXTRA_NAME=}" "${WEB_EXTRA_HOST=}"
 : "${DEST_DIR:=tools/docker}" "${LOCAL_TMP_DIR:=.tmp}" "${SYNC_DIR:=modules}" "${LOCK_FILE:=/repo/.tmp/ci.lock}"
 : "${SYNC_EXCLUDES=.git vendor/ node_modules/ .DS_Store *.zip *.sha256 .composer/ .phpunit.cache/}"
-: "${MODULES_DIR=modules}" "${APP_TARGETS:=app}" "${DEPLOY_MODULES=}"
+: "${MODULES_DIR=modules}" "${APP_TARGETS:=app}" "${DEPLOY_MODULES=}" "${DEPLOY_EXTRA=}"
 : "${DEPLOY_EXCLUDES=/tests/ /phpunit* /.php-cs-fixer* .DS_Store}"
 : "${DEV_MARKER=}" "${CI_MODULES=}" "${CI_CHECK_SCRIPT:=check}" "${CI_STATIC_SCRIPT=}" "${STATIC_TOOLS_DIR=}"
 : "${MATRIX_PHP_VERSIONS:=8.3 8.4 8.5}" "${DEFAULT_PHP:=8.4}" "${STATIC_PHP:=$DEFAULT_PHP}" "${DEPLOY_PHP:=$DEFAULT_PHP}"
@@ -165,6 +165,28 @@ match MODULES_DIR "$_dir" opt; no_dots MODULES_DIR
 words APP_TARGETS '^[a-z0-9][a-z0-9_-]*$' "target name (lowercase letters, digits, - and _)"
 [ -n "$APP_TARGETS" ] || err "APP_TARGETS: at least one target is required"
 words DEPLOY_MODULES "$_modname" "module name (^[a-z][a-z0-9_]{1,63}\$)"
+# DEPLOY_EXTRA: blank-separated pairs <folder relative to SYNC_DIR>:<name>; the name is the folder in the application and the
+# word deploy.sh takes, it must be a module name that DEPLOY_MODULES and the other pairs do not use
+_extra_names=""
+set -f
+for _w in $DEPLOY_EXTRA; do
+    case "$_w" in
+        *:*:*|:*|*:) err "DEPLOY_EXTRA: \"$_w\" is not <folder>:<name> (exactly one colon, a folder before it and a name after it)"; continue ;;
+        *:*) ;;
+        *) err "DEPLOY_EXTRA: \"$_w\" is not <folder>:<name> (the colon is missing)"; continue ;;
+    esac
+    _l="${_w%%:*}"; _r="${_w#*:}"
+    [[ "$_l" =~ $_dir ]] || err "DEPLOY_EXTRA: the folder of \"$_w\" does not match the format $_dir (relative to SYNC_DIR, no leading dot)"
+    case "$_l" in */) err "DEPLOY_EXTRA: the folder of \"$_w\" must not end with \"/\"" ;; esac
+    case "/$_l/" in */../*|*//*) err "DEPLOY_EXTRA: the folder of \"$_w\" must not contain \"..\" or \"//\"" ;; esac
+    case "$_l" in *..*) err "DEPLOY_EXTRA: the folder of \"$_w\" must not contain \"..\"" ;; esac
+    [[ "$_r" =~ $_modname ]] || err "DEPLOY_EXTRA: the name of \"$_w\" is not a valid module name (^[a-z][a-z0-9_]{1,63}\$)"
+    # shellcheck disable=SC2086
+    if in_list "$_r" $DEPLOY_MODULES; then err "DEPLOY_EXTRA: the name \"$_r\" is also in DEPLOY_MODULES (a name has one source folder)"; fi
+    case " $_extra_names " in *" $_r "*) err "DEPLOY_EXTRA: the name \"$_r\" appears twice" ;; esac
+    _extra_names="${_extra_names:+$_extra_names }$_r"
+done
+set +f
 words DEPLOY_EXCLUDES "$_glob" "rsync exclude pattern (letters, digits, . _ - / * ?)"
 match DEV_MARKER '^[A-Za-z0-9._-]+$' opt
 case "$DEV_MARKER" in .|..|.stack-managed) err "DEV_MARKER=\"$DEV_MARKER\" is reserved" ;; esac
@@ -219,7 +241,7 @@ if [ "$_check" -eq 1 ]; then
     echo "  server folder: $REMOTE_ROOT; PHP in tools: $TOOLS_PHP_VERSIONS; matrix: $MATRIX_PHP_VERSIONS; default: $DEFAULT_PHP"
     echo "  project folder: $_dest (project root as seen by the scripts: $PROJECT_ROOT_REL)"
     echo "  synced: $SYNC_DIR -> /repo/$SYNC_DIR; modules in /<target>/${MODULES_DIR:-.}; targets: $APP_TARGETS"
-    echo "  deploy: ${DEPLOY_MODULES:-every module found}; matrix: ${CI_MODULES:-every module found}"
+    echo "  deploy: ${DEPLOY_MODULES:-every module found}${_extra_names:+; extra: $_extra_names}; matrix: ${CI_MODULES:-every module found}"
     exit 0
 fi
 

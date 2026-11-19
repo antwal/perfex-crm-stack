@@ -181,7 +181,7 @@ Every command below is relative to the project root: `cd "{{PROJECT_ROOT_ABS}}"`
 | Command | What it does |
 |---|---|
 | `{{DEST_REL}}/sync.sh` | mirrors `{{SYNC_DIR}}/` to `/repo/{{SYNC_DIR}}` on the server (without `vendor/`, `.git`, zips), and puts `locked.sh` in place |
-| `{{DEST_REL}}/deploy.sh [--adopt] <module> [<target>]` | sync, then on the server: `composer install --no-dev`, copy of the module into `/<target>/{{MODULES_DIR}}/<module>`, development dependencies back in the repository copy. Modules: `{{DEPLOY_MODULES}}` (empty = every `<name>/<name>.php` found); targets: `{{APP_TARGETS}}` |
+| `{{DEST_REL}}/deploy.sh [--adopt] <module> [<target>]` | sync, then on the server: `composer install --no-dev`, copy of the module into `/<target>/{{MODULES_DIR}}/<module>`, development dependencies back in the repository copy. Modules: `{{DEPLOY_MODULES}}` (empty = every `<name>/<name>.php` found); also the names of `DEPLOY_EXTRA` in `stack.conf` (modules that live deeper than `{{SYNC_DIR}}/<name>/`, see below); targets: `{{APP_TARGETS}}` |
 | `{{DEST_REL}}/ci-local.sh [<module> ...]` | the PHP matrix `{{MATRIX_PHP_VERSIONS}}`: `composer install`, `validate --strict`, `run {{CI_CHECK_SCRIPT}}`; then the static analysis script, if there is one, on PHP {{STATIC_PHP}} |
 | `{{DEST_REL}}/run.sh '<command>'` | one command on the server, inside the lock, as `www-data` (it puts `locked.sh` there first if it is missing). Integration tests: `run.sh 'cd /repo/{{SYNC_DIR}}/<module> && PATH=/opt/php/{{DEPLOY_PHP}}:$PATH composer test:int'` |
 | `{{DEST_REL}}/snapshot.sh [<label>]` | a dump of the database and an archive of `/app`, kept on the server in `/repo/.tmp/snapshots/<name>/` |
@@ -221,6 +221,13 @@ PHP version. The example module of the template (`examples/module/sample_module/
 `test:int` script and `tests/Integration/TestInstance.php`, a helper that reads the stack variables
 (`PERFEX_URL`, `PERFEX_APP_PATH`, `PERFEX_DB_*`, `MAILPIT_*`) that the SSH session provides.
 
+A module that lives **inside another folder** of `{{SYNC_DIR}}/` (a sample module in `<module>/examples/<sample>/`, say) is
+listed in the parameter `DEPLOY_EXTRA` as `<folder relative to {{SYNC_DIR}}>:<name>`, for example
+`mymodule/examples/demo_notes:demo_notes`: the folder must hold `<name>.php`, and `deploy.sh demo_notes` copies it to
+`/<target>/{{MODULES_DIR}}/demo_notes`. It follows the rules of every module: the `.stack-managed` marker, `--adopt`,
+the excludes, no folder with a dot name, `vendor/.htaccess`. No folder of the path to it may be a symbolic link, and the name must
+not also be a module of `{{SYNC_DIR}}/`.
+
 ### Writing your own script
 
 Your own scripts live in `{{DEST_REL}}/extra/`: `render.sh --force` rewrites only the `README.md` of that folder and leaves
@@ -250,6 +257,7 @@ and arguments until the next major version, and the template's `CHANGELOG.md` an
 | `valid_globs "<words>"` | blank-separated rsync patterns made of letters, digits and `. _ - / * ?` |
 | `discover_modules <folder>` | the names of the sub-folders `<name>/<name>.php`, one per line (symbolic links are skipped) |
 | `deploy_module_names`, `ci_module_names` | the modules `deploy.sh` and `ci-local.sh` accept: the closed list of `stack.conf`, or the ones found in `REPO_DIR` |
+| `deploy_extra_names`, `deploy_extra_source <name>` | the names of `DEPLOY_EXTRA`, and the folder (relative to `SYNC_DIR`) listed for one name; validate it with `valid_relpath` before using it |
 | `remote_locked '<command>'` | runs a shell command on the server, inside the lock, as one argument of `locked.sh`; the standard input reaches the command |
 | `ensure_locked_sh` | puts `locked.sh` on the server when it is not there (one ssh round trip) |
 
