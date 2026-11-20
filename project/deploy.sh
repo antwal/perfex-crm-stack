@@ -55,7 +55,7 @@ if in_list "$MOD" $_allowed; then
     SRC_REL="$MOD"
 elif in_list "$MOD" $_extras; then
     SRC_REL="$(deploy_extra_source "$MOD")"
-    # the server refuses any ".." in it: the Mac does too, before anything is copied
+    # the server refuses any ".." in it: your machine does too, before anything is copied
     { valid_relpath "$SRC_REL" && [[ "$SRC_REL" != *..* ]]; } || die "invalid folder for $MOD in DEPLOY_EXTRA of stack.conf: \"$SRC_REL\""
 else
     die "module not allowed: $MOD (allowed: ${_allowed:-none found}${_extras:+; in DEPLOY_EXTRA: $_extras})"
@@ -79,7 +79,7 @@ done
 "$HERE/sync.sh"
 
 # The script runs on the server with the values as positional parameters (quoted with %q), never pasted into its text.
-# It checks them again: the server does not trust the Mac more than the Mac trusts free text.
+# It checks them again: the server does not trust your machine more than your machine trusts free text.
 # STACK_SERVER_ROOT is empty on the server; tests/deploy-test.sh sets it to run this very text against a folder tree.
 _args="$(printf '%q %q %q %q %q %q %q %q %q' "$MOD" "$TARGET" "$DEPLOY_PHP" "$SYNC_DIR" "$MODULES_DIR" "$DEV_MARKER" "$ADOPT" "$DEPLOY_EXCLUDES" "$SRC_REL")"
 remote_locked "bash -s -- $_args" <<'REMOTE'

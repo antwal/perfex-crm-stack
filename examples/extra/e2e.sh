@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs a Playwright suite of your project against the instance, from this Mac.
+# Runs a Playwright suite of your project against the instance, from this machine.
 # Usage: e2e.sh <folder> [<playwright argument> ...]
 #   folder    a folder of the project, relative to the project root, that holds playwright.config.ts (tests/e2e/mysuite)
 #   argument  handed to "playwright test" as it is, if it is made of letters, digits and . _ = / , : @ - only: no blank, no quote,
@@ -36,7 +36,7 @@ _url_re='^https?://[A-Za-z0-9._~:/?&=%#@+,;-]+$'
 _tmp_re='^[A-Za-z0-9._][A-Za-z0-9._/-]*$'
 [[ "$APP_URL" =~ $_url_re ]] || die "invalid APP_URL in stack.conf: $APP_URL"
 [[ "$LOCAL_TMP_DIR" =~ $_tmp_re && "$LOCAL_TMP_DIR" != *..* ]] || die "invalid LOCAL_TMP_DIR in stack.conf: $LOCAL_TMP_DIR"
-command -v npx > /dev/null || die "npx not found: this script needs Node on this Mac (the template installs none)"
+command -v npx > /dev/null || die "npx not found: this script needs Node on this machine (the template installs none)"
 
 OUT="$ROOT/$LOCAL_TMP_DIR/e2e/${FOLDER##*/}"
 mkdir -p "$OUT"

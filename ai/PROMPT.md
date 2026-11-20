@@ -1,6 +1,6 @@
 # Prompts for an AI agent
 
-Two ready prompts for an AI agent with shell access on your Mac (Claude Code, Codex, Copilot in agent mode or another): **A** to connect to a stack that already runs,
+Two ready prompts for an AI agent with shell access on your machine (Claude Code, Codex, Copilot in agent mode or another): **A** to connect to a stack that already runs,
 **B** to build a new one. Copy one, fill the blanks of its table (the rows with a value already have the default), and
 paste it in a new session opened at the **root of your project**. They assume the template is in the project as
 `perfex-crm-stack/`, the name a clone gets; if it is somewhere else, change the path.
@@ -69,7 +69,7 @@ stop for my answer where a step says so.
    folder (`.tmp`, or the `LOCAL_TMP_DIR` of `params.env`) and my copy of Perfex CRM if it is in the project (a folder
    or a zip). Add the missing lines, show me the file, commit nothing.
 4. Show me the `ssh-keygen` command and the `~/.ssh/config` block of step 1 of `<DEST_DIR>/README.md`. STOP: run them only
-   after my OK. The private key stays on my Mac and is never pasted in chat: show me only the `.pub` line.
+   after my OK. The private key stays on my machine and is never pasted in chat: show me only the `.pub` line.
 5. Give me, in one ordered list, the commands I run myself on the server as root and in Portainer (steps 2 to 5 of
    `<DEST_DIR>/README.md`), with my values already filled in. STOP until I tell you it is done.
 6. Run `<DEST_DIR>/doctor.sh` and show me the output. If the application is not installed yet, tell me to run
@@ -116,4 +116,4 @@ Parameters:
   your repository: the prompts have the agent add them to `.gitignore`. A submodule is recorded by git itself and is not ignored.
 - `ai/AGENTS-section.md` is the same text for every tool; its header says which file each tool reads (`AGENTS.md`, `CLAUDE.md`,
   `.github/copilot-instructions.md`) and tells an agent to install it there if it is missing. The prompts are for an agent on
-  your Mac: a cloud agent (the Copilot coding agent, Codex cloud) reads the rules but has no SSH key and no route to the Docker network.
+  your machine: a cloud agent (the Copilot coding agent, Codex cloud) reads the rules but has no SSH key and no route to the Docker network.

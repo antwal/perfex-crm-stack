@@ -3,7 +3,7 @@
 #   <project root>/<SYNC_DIR>/   ->   /repo/<SYNC_DIR>/       in the tools container (as www-data)
 #   locked.sh (this folder)      ->   LOCKED_SH of stack.conf (/repo/<DEST_DIR>/locked.sh)
 # The server mirrors the layout of your project (/repo is the project root), so a path relative to the project root means
-# the same thing on the Mac and on the server. locked.sh always arrives, wherever this folder is in your project.
+# the same thing on your machine and on the server. locked.sh always arrives, wherever this folder is in your project.
 # Usage: sync.sh            (SSH alias: STACK_SSH in the environment, default SSH_ALIAS of stack.conf)
 # Values come from stack.conf, not from this file.
 set -euo pipefail

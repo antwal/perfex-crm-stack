@@ -70,7 +70,7 @@ services:
       MAILPIT_SMTP_HOST: "${MAILPIT_SMTP_HOST:-}"
       MAILPIT_SMTP_PORT: "${MAILPIT_SMTP_PORT:-}"
       # Optional sshd switches, read by tools/entrypoint.sh at every start. SSH_PORT: if you set it, set the same
-      # Port in ~/.ssh/config. SSH_TCP_FORWARDING=1 allows "ssh -L" (for example a MariaDB client on your Mac).
+      # Port in ~/.ssh/config. SSH_TCP_FORWARDING=1 allows "ssh -L" (for example a MariaDB client on your machine).
       SSH_PORT: "${SSH_PORT:-}"
       SSH_TCP_FORWARDING: "${SSH_TCP_FORWARDING:-0}"
       # The variables the entrypoint copies into every SSH session (empty ones are skipped).

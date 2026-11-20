@@ -4,6 +4,13 @@ The changes of each version of the template, in the format of [Keep a Changelog]
 numbered MAJOR.MINOR.PATCH. The functions of `project/lib.sh` listed in "Writing your own script" (the generated README) are the API
 of the scripts you write yourself: they keep their names and arguments until the next major version.
 
+## [Unreleased]
+
+### Changed
+
+- The documents, the scripts and the diagram say "your machine" where they said "your Mac": the template was built on macOS,
+  but Linux works and Windows through WSL (untested); the facts about macOS (bash 3.2, no flock) stay where they are.
+
 ## [0.3.0]
 
 ### Changed

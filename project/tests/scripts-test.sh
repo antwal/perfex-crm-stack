@@ -531,7 +531,7 @@ else
 fi
 refused "an unknown argument" doctor.sh --nope
 STACK_TEST_SSH_STATUS=255 STACK_TEST_CURL_OUT=000 STACK_TEST_CURL_STATUS=6 sh_run doctor.sh
-if [ "$STATUS" -eq 2 ] && grep -q 'FAIL: cannot log in' "$WORK/out" && grep -q 'does not resolve from this Mac' "$WORK/out"; then
+if [ "$STATUS" -eq 2 ] && grep -q 'FAIL: cannot log in' "$WORK/out" && grep -q 'does not resolve from this machine' "$WORK/out"; then
     good "doctor.sh: no login and no DNS are two failures, and the exit status counts them"
 else
     bad "doctor.sh: failure path misbehaved (status $STATUS): $(cat "$WORK/out")"

@@ -285,7 +285,7 @@ printf '  %s\n' "${_written[@]}"
 cat <<EOT
 
 Next steps:
-  1. read $DEST_DIR/README.md (your values are in it): the Mac, the server and Portainer steps
+  1. read $DEST_DIR/README.md (your values are in it): the local, the server and the Portainer steps
   2. check the scripts without touching any server:  bash $DEST_DIR/tests/deploy-test.sh && bash $DEST_DIR/tests/locked-test.sh
   3. after the stack is up:  $DEST_DIR/doctor.sh      (and  $DEST_DIR/doctor.sh --guide  prints the steps with your values)
 EOT

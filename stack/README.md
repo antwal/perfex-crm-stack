@@ -10,9 +10,9 @@ neutral default, and the project folder that `render.sh` makes ships a `portaine
 | `web/` | the build context of the web image: `Dockerfile`, `entrypoint.sh`, `apache/000-default.conf`, `php/uploads.ini` |
 | `tools.Dockerfile`, `tools/` | the build of the tools image: `entrypoint.sh` and `sshd_config` |
 
-## The SSH key and the alias (on your Mac, before the server steps)
+## The SSH key and the alias (on your machine, before the server steps)
 
-The tools container accepts one user, `www-data`, with a public key only: the key pair is made on your Mac, and its public
+The tools container accepts one user, `www-data`, with a public key only: the key pair is made on your machine, and its public
 line goes into `<REMOTE_ROOT>/tools/authorized_keys` on the server ("The files that must exist on the server", below).
 `render.sh` writes these two commands with your values in the project README (step 1), and `doctor.sh --guide` prints them;
 here they are for whoever uses `stack/` alone.
@@ -39,7 +39,7 @@ cat ~/.ssh/myproject-test.pub
 
 The line it prints goes into `authorized_keys` (`myproject-test` is the `SSH_ALIAS` of `params.example.env`: use yours).
 `HostName` is your `TOOLS_HOST`; `Port` is `SSH_PORT` if you set it, or the host port if you publish one ("If your machine
-does not reach the Docker network", below). The private key never leaves the Mac and is never pasted into a chat.
+does not reach the Docker network", below). The private key never leaves your machine and is never pasted into a chat.
 One key per alias keeps things simple; an existing key works too, with its path in `IdentityFile` and its public line in
 `authorized_keys`.
 
@@ -52,7 +52,7 @@ from `web/` (its Dockerfile copies `apache/`, `php/` and `entrypoint.sh` from th
 whole (it copies `tools/sshd_config` and `tools/entrypoint.sh`).
 
 ```bash
-# on your Mac, from the folder that holds perfex-crm-stack/: this folder goes to the server as <REMOTE_ROOT>/build/
+# on your machine, from the folder that holds perfex-crm-stack/: this folder goes to the server as <REMOTE_ROOT>/build/
 rsync -av --delete perfex-crm-stack/stack/ root@SERVER:/srv/docker/perfexcrm/myproject/build/
 ```
 
@@ -114,7 +114,7 @@ never in a file).
 
 **If your machine does not reach the Docker network.** The compose file publishes no port (`expose:` only), so the stack is
 reached by DNS name, from a machine that resolves the names of the Docker network and routes to it: that is the reference
-infrastructure. If your Mac cannot, publish two ports on the Docker host and point everything at the host's address; the DNS
+infrastructure. If your machine cannot, publish two ports on the Docker host and point everything at the host's address; the DNS
 names are then not needed. Add to the file (the compose file in the repository stays as it is):
 
 ```yaml
@@ -130,11 +130,11 @@ services:
 - **Web editor:** put the two `ports:` blocks under the existing `web` and `tools` services in the pasted file (they sit
   beside `expose:`). **Git repository stack:** its file cannot be edited in Portainer, so keep these lines in a small extra file
   in your own copy of the repository and list it in *Additional paths*, as with `web-extra.yml`.
-- Parameters: set `APP_URL` to `http://<address of the host>:8080` and render again (the Mac scripts and `doctor.sh` use it);
+- Parameters: set `APP_URL` to `http://<address of the host>:8080` and render again (the local scripts and `doctor.sh` use it);
   in `~/.ssh/config`, `HostName <address of the host>` and `Port 2200`. `doctor.sh` still prints the default `Port 2222` in its
   hints: the `Port` that counts is the one in your alias.
 - In Portainer, the stack variable `APP_URL` is also what the tools container uses to reach the web container. Keep it at
-  `http://<APP_HOST>`, which works inside the Docker network whatever the Mac does: after loading `portainer.env`, which now
+  `http://<APP_HOST>`, which works inside the Docker network whatever your machine does: after loading `portainer.env`, which now
   carries the host address, edit that one variable back. (The host address also works from the container if the host's
   firewall lets the container reach its own address; `doctor.sh` tells you when it does not.)
 - Perfex keeps its address in `APP_BASE_URL` (`app-config.php`, written by the installation wizard): run the wizard through the

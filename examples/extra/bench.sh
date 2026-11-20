@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Response times of one URL of the instance, measured from this Mac: curl in a loop, then percentiles.
+# Response times of one URL of the instance, measured from this machine: curl in a loop, then percentiles.
 # Usage: bench.sh <path> [<requests> [<timing header>]]
 #   path           what follows APP_URL, starting with "/" and made of letters, digits and . _ ~ / % ? = & -   (/admin/auth/login)
 #   requests       how many requests are timed: 1 to 9999 (default 100). Ten more requests, not counted, warm the application first.

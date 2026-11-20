@@ -3,7 +3,7 @@
 # Usage: infection-diff.sh <module> [<file> ...]      files are relative to the module's folder: src/Service/Foo.php
 #   module   a name from CI_MODULES of stack.conf (every <SYNC_DIR>/<name>/<name>.php found when that list is empty).
 #   file     a PHP source under src/ that exists. Without files: the PHP files of src/ that are added or modified compared
-#            with BASE_BRANCH, from git on this Mac (git diff --relative --name-only --diff-filter=AM <BASE_BRANCH>).
+#            with BASE_BRANCH, from git on this machine (git diff --relative --name-only --diff-filter=AM <BASE_BRANCH>).
 #            If none changed, the script says so and stops: an empty filter would make Infection run the whole suite.
 # Environment (all optional):
 #   BASE_BRANCH        the branch to compare with (default main)

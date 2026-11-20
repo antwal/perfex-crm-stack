@@ -3,7 +3,7 @@
 Written by `render.sh` on {{RENDER_DATE}} from `{{RENDER_SOURCE}}`: to change a value, change the parameter file and render again
 (`render.sh <params> <project root> --force`), do not edit the files of this folder.
 
-The stack `{{STACK_NAME}}` runs on a Docker server managed with Portainer. Your Mac reaches it over the Docker network's DNS
+The stack `{{STACK_NAME}}` runs on a Docker server managed with Portainer. Your machine reaches it over the Docker network's DNS
 names. **There is one way in**: a service container (`tools`) with SSH, key only, user `www-data`. Nothing else is needed or
 used: no root, no password, no Portainer, no Docker socket.
 
@@ -20,7 +20,7 @@ The instance is **throw-away**: tests install and uninstall modules and send abn
 
 `SERVER` is how **you** log in to the server as root (an alias or an address). An AI agent has no such access and does not ask
 for it: it prepares the commands, you run them. The same steps, with your values, come from `{{DEST_REL}}/doctor.sh --guide`.
-Run the Mac steps from the **project root**, the folder this was rendered for:
+Run the local steps from the **project root**, the folder this was rendered for:
 
 ```bash
 cd "{{PROJECT_ROOT_ABS}}"
@@ -28,7 +28,7 @@ cd "{{PROJECT_ROOT_ABS}}"
 
 The template (with `stack/`) is at `{{TEMPLATE_REL}}` from there.
 
-### Step 1, on the Mac: a key and an alias
+### Step 1, on your machine: a key and an alias
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/{{SSH_ALIAS}} -C {{SSH_ALIAS}} -N ""
@@ -50,9 +50,9 @@ EOT
 cat ~/.ssh/{{SSH_ALIAS}}.pub
 ```
 
-Copy the line it prints: step 3 needs it. The private key never leaves the Mac and is never pasted into a chat.
+Copy the line it prints: step 3 needs it. The private key never leaves your machine and is never pasted into a chat.
 
-### Step 2, on the Mac: copy the build context of the two images to the server
+### Step 2, on your machine: copy the build context of the two images to the server
 
 With `rsync`, not `scp -r`: if the `build` folder already exists, `scp -r` nests the copy and the build reuses stale files.
 
@@ -141,7 +141,7 @@ it. The four values become the Portainer variables of step 5 and go nowhere else
    `PERFEX_DB_USER`, `PERFEX_DB_PASSWORD`. The values go in no file; while they are empty the stack refuses to start, on purpose.
 4. **Deploy the stack**. The containers are `{{STACK_NAME}}` (web) and `{{STACK_NAME}}-tools`.
 
-### Step 6, on the Mac: check
+### Step 6, on your machine: check
 
 ```bash
 {{DEST_REL}}/doctor.sh
@@ -265,7 +265,7 @@ and arguments until the next major version, and the template's `CHANGELOG.md` an
 `lib.sh` or a closed list first, and the checks come **before** the first call. Values go to the server as positional
 parameters quoted with `printf '%q'`, to a script sent with `bash -s --` and a here-document, never pasted into its text:
 `deploy.sh` is the model (the `_args=` line and the `remote_locked "bash -s -- $_args" <<'REMOTE'` that follows it), and the
-script on the server checks what it receives again: the server does not trust the Mac more than the Mac trusts free text.
+script on the server checks what it receives again: the server does not trust your machine more than your machine trusts free text.
 
 **Heavy jobs.** `remote_locked '<command>'` runs the command inside the lock `{{LOCK_FILE}}`: one heavy job at a time per
 server, at low priority, and whatever is left in its process group is terminated when it ends. The standard input crosses
@@ -276,7 +276,7 @@ $TOOLS_PHP_VERSIONS` have checked the version.
 
 **Files and secrets.** Temporary files and outputs go in `$ROOT/$LOCAL_TMP_DIR/<name of the script>/` (`{{LOCAL_TMP_DIR}}/`
 in this project): one folder to ignore and to clean. No secret in a file, a log or an output: the database credentials live
-in the stack variables on the server, and a script that needs them reads them there, over ssh. The scripts run on the Mac:
+in the stack variables on the server, and a script that needs them reads them there, over ssh. The scripts run on your machine:
 write bash 3.2 (no associative arrays, no `mapfile`, no `${var,,}`, and no `"${array[@]}"` of an empty array under `set -u`).
 
 **The smallest complete script** prints the version of the default PHP of the tools container, inside the lock. Save it as
@@ -376,14 +376,14 @@ or `SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1` (needs `mod_setenvif`).
   still has the old files: repeat step 2.
 - The SSH host keys of the `tools` container live in `{{REMOTE_ROOT}}/tools/hostkeys`: rebuilding the image does not change the fingerprint.
 - Optional switches of the `tools` container, as stack variables: `SSH_TCP_FORWARDING=1` allows `ssh -L` (for example a graphical
-  MariaDB client from your Mac; off by default), `SSH_PORT` changes the port (then change `Port` in `~/.ssh/config` too).
+  MariaDB client from your machine; off by default), `SSH_PORT` changes the port (then change `Port` in `~/.ssh/config` too).
 
 ## 7. Rules
 
 - One user, `www-data` (uid 33): it can write the application files and `/repo`, nothing else. No root, no password.
 - The database credentials live in the stack variables and in the SSH environment of the container: never in a file of the
   project, in chat, in logs or in commits. A credential that lands in chat or in a screenshot is considered compromised: rotate it.
-- `app/` on the server is a **copy** of the application: your own copy of the source stays on the Mac, outside the repository.
+- `app/` on the server is a **copy** of the application: your own copy of the source stays on your machine, outside the repository.
 - Changes to the instance's own files (`.htaccess`, the application's configuration) only with the owner's permission and with
   a backup outside the web folder: `/repo/.<name>.bak`.
 - `deploy.sh`, `ci-local.sh`, `snapshot.sh`, `reset.sh` and `install-perfex.sh` accept only the modules, targets and aliases

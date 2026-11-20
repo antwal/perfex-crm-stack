@@ -5,8 +5,8 @@ metadata:
   type: reference
 ---
 
-Test stack `{{STACK_NAME}}` on the owner's external Docker server (Portainer, Docker network `{{DOCKER_NETWORK}}`, DNS names the
-Mac resolves). **Never ask for** root, Portainer, the Docker socket or the internal network: the one agreed way in is the `tools`
+Test stack `{{STACK_NAME}}` on the owner's external Docker server (Portainer, Docker network `{{DOCKER_NETWORK}}`, DNS names your
+machine resolves). **Never ask for** root, Portainer, the Docker socket or the internal network: the one agreed way in is the `tools`
 container. Written by render.sh on {{RENDER_DATE}}; the full procedure is in `{{DEST_REL}}/README.md`.
 
 - Application: `{{APP_URL}}` (image `{{WEB_IMAGE}}`; files in `{{REMOTE_ROOT}}/app` on the server, mounted as `/app` in the `tools`
@@ -20,7 +20,7 @@ container. Written by render.sh on {{RENDER_DATE}}; the full procedure is in `{{
   `run.sh '<command>'`, `snapshot.sh`, `reset.sh` (a person types the snapshot name: do not run it), `doctor.sh`, `install-perfex.sh`,
   `extra/` (the owner's own scripts, same rules) and `tests/` (fake ssh and rsync, no server touched).
 
-**How to apply:** for practical checks use `curl` from the Mac to `{{APP_URL}}` and `ssh {{SSH_ALIAS}}` (or `run.sh`) for logs, deploys,
+**How to apply:** for practical checks use `curl` from your machine to `{{APP_URL}}` and `ssh {{SSH_ALIAS}}` (or `run.sh`) for logs, deploys,
 the CI matrix and database queries. For the web interface, have the owner sign in the browser: never type credentials on a host that
 is not local; uploads from the browser are the owner's, verify over SSH. Never put credentials in chat, files, logs or commits (if it
 happens, ask for them to be rotated). Before touching the instance's own configuration, ask, and leave a backup in `/repo/.<name>.bak`.

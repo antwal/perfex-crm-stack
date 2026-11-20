@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests deploy.sh without touching any server, in two parts.
 #
-# Part 1, the Mac side, with a fake ssh and a fake rsync that only record their calls: module, target and SSH alias must
+# Part 1, the local side, with a fake ssh and a fake rsync that only record their calls: module, target and SSH alias must
 # come from closed lists or strict patterns, every refusal must happen BEFORE any call is made, and a valid deploy must
 # pass the values to the server as positional parameters (never pasted into the script text). Both ways of choosing the
 # modules are tried: a closed DEPLOY_MODULES list, and discovery of <name>/<name>.php folders.
@@ -77,7 +77,7 @@ mkdir -p "$WORK/src/alpha_mod" "$WORK/src/beta_mod" "$WORK/src/gamma_mod"
 ln -s alpha_mod "$WORK/src/linked_mod"      # in the list, but a symbolic link
 # beta_mod: in the list, folder without its init file; delta_mod: in the list, no folder; gamma_mod: valid, not in the list
 
-echo "--- part 1: the Mac side"
+echo "--- part 1: the local side"
 expect_refused "module with a command"            "$SSH_ALIAS" "alpha_mod; touch pwned"
 expect_refused "module with a path"               "$SSH_ALIAS" "../alpha_mod"
 expect_refused "module with a space"              "$SSH_ALIAS" "alpha_mod -v"

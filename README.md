@@ -1,11 +1,11 @@
 # Perfex CRM Stack Docker: a test instance for Perfex CRM, on a Docker server
 
-A template for trying Perfex CRM and its modules (and PHP code around them) on a **real instance on a Docker server**, from your Mac,
+A template for trying Perfex CRM and its modules (and PHP code around them) on a **real instance on a Docker server**, from your machine,
 with the PHP matrix, integration tests and throw-away snapshots, reachable through **one single door**: a service container with
 SSH, key only. The stack runs on Portainer; you paste one compose file (or point a Git repository stack at it), and a small
 generator writes the scripts and documents for your project.
 
-It also works for an AI agent with a shell on your Mac (Claude Code, Codex, Copilot in agent mode or another): the agent gets
+It also works for an AI agent with a shell on your machine (Claude Code, Codex, Copilot in agent mode or another): the agent gets
 the scripts, a prompt and a section for its instruction file (`AGENTS.md`, `CLAUDE.md` or `.github/copilot-instructions.md`),
 never root, Portainer, the Docker socket or your database password. A cloud agent reads the rules but has no SSH key and no
 route to the Docker network. See `ai/`.
@@ -21,20 +21,20 @@ The template documents the setup it was built on, as a reference. Adapt it, or k
 | Piece | What the template assumes |
 |---|---|
 | A Docker host | with Portainer to deploy the stack. Tested on Portainer **Business Edition** (November 2026); the compose file uses no Business-only feature (no relative volume paths, see §4), but Community Edition has not been tried |
-| An external Docker network | for example `containers`, whose container names also resolve **on your Mac** (a DNS entry such as `*.docker` pointing at the host; the Mac reaches the containers by name: no port is published) |
+| An external Docker network | for example `containers`, whose container names also resolve **on your machine** (a DNS entry such as `*.docker` pointing at the host; your machine reaches the containers by name: no port is published) |
 | MariaDB | already running on the server (the template does not create it): a database and a user for this instance |
 | Mailpit (optional) | already running on the server, for the application's test mail |
-| Your Mac | bash 3.2 or later, ssh, rsync, curl, perl (all in macOS; Linux works, Windows only through WSL and untested) |
+| Your machine | bash 3.2 or later, ssh, rsync, curl, perl (all in macOS; Linux works, Windows only through WSL and untested) |
 | Root on the server | for a handful of one-time steps (folders, images). Daily use needs none |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/reference-infrastructure-dark.svg">
-  <img src="docs/reference-infrastructure.svg" width="680" alt="Your Mac reaches the web container over http and the tools container over ssh with a key. Both run in a Portainer stack on a Docker host and share /app, the application files; the tools container also holds /repo, a mirror of your code. MariaDB and an optional Mailpit already run on the same Docker network, outside the stack.">
+  <img src="docs/reference-infrastructure.svg" width="680" alt="Your machine reaches the web container over http and the tools container over ssh with a key. Both run in a Portainer stack on a Docker host and share /app, the application files; the tools container also holds /repo, a mirror of your code. MariaDB and an optional Mailpit already run on the same Docker network, outside the stack.">
 </picture>
 
 The tools container has PHP 8.1 to 8.5, Composer, rsync and the MariaDB client: the snapshots and the lock live there. The
-web container serves `/app` and talks to MariaDB and, for the test mail, to Mailpit, whose web interface your Mac opens too.
-No port is published: the Mac reaches both containers by name, over the Docker network.
+web container serves `/app` and talks to MariaDB and, for the test mail, to Mailpit, whose web interface your machine opens too.
+No port is published: your machine reaches both containers by name, over the Docker network.
 
 ## 2. What is in the folder
 
@@ -68,14 +68,14 @@ perfex-crm-stack/
 │   ├── deploy.sh          sync, then copies a module into the application in development mode (.stack-managed marker, --adopt)
 │   ├── ci-local.sh        the PHP matrix on the server: composer install, validate --strict, your check script, per version
 │   ├── run.sh             one command on the server, inside the lock
-│   ├── doctor.sh          checks the stack from the Mac; --guide prints the setup steps with your values
+│   ├── doctor.sh          checks the stack from your machine; --guide prints the setup steps with your values
 │   ├── snapshot.sh        a dump of the database and an archive of /app, kept on the server
 │   ├── reset.sh           puts a snapshot back, after you type its name (--list shows them)
 │   ├── install-perfex.sh  copies your Perfex CRM (a folder or a zip) into /app
 │   ├── locked.sh          runs on the server: one heavy job at a time (flock), low priority, its process group ended with the job
 │   ├── extra/             README.md only: your own scripts, never touched by render.sh --force
 │   └── tests/             four tests with a fake ssh, rsync and curl: no server is touched
-│       ├── deploy-test.sh           deploy.sh from the Mac, and its server script against a folder tree
+│       ├── deploy-test.sh           deploy.sh from your machine, and its server script against a folder tree
 │       ├── locked-test.sh           run.sh and locked.sh
 │       ├── scripts-test.sh          ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh, doctor.sh and the scripts of examples/extra/ (fake git and npx too)
 │       └── render-test.sh           render.sh with good and bad parameters (it finds the template through TEMPLATE_REL, or STACK_TEMPLATE_DIR)
@@ -84,7 +84,7 @@ perfex-crm-stack/
 │   ├── module/sample_module/    the smallest module that goes through all of it, with unit and integration tests
 │   └── extra/                   scripts to copy into the generated extra/ folder (tested by scripts-test.sh)
 │       ├── infection-diff.sh    Infection on the changed files of a module, on the server, inside the lock
-│       ├── bench.sh             response times of one URL from the Mac, with percentiles
+│       ├── bench.sh             response times of one URL from your machine, with percentiles
 │       └── e2e.sh               a Playwright suite of your project against the instance
 └── ai/                    optional (INCLUDE_AI=1): what an AI agent with a shell gets, rendered with your values
     ├── PROMPT.md          two ready prompts: connect to a stack that already runs, or build a new one
@@ -129,7 +129,7 @@ perfex-crm-stack/render.sh perfex-crm-stack/params.env .        # writes ./tools
 
 `render.sh` refuses to write into a folder that is not empty unless you pass `--force`, and with `--force` it replaces only
 the files it generates. Then follow `tools/docker/README.md`: it has your values in every command. In short: a key and an
-SSH alias on the Mac (its step 1: `ssh-keygen` and the `~/.ssh/config` block; `stack/README.md` repeats them for whoever uses
+SSH alias on your machine (its step 1: `ssh-keygen` and the `~/.ssh/config` block; `stack/README.md` repeats them for whoever uses
 `stack/` alone); on the server, as root, a few folders, the authorized key, and the two images built from `stack/`;
 the stack in Portainer; `tools/docker/doctor.sh`; your copy of Perfex with `tools/docker/install-perfex.sh`.
 
@@ -157,7 +157,7 @@ cat ~/.ssh/myproject-test.pub
 ```
 
 The line it prints goes into `<REMOTE_ROOT>/tools/authorized_keys` on the server (step 3 of the generated README). The private
-key never leaves the Mac and is never pasted into a chat.
+key never leaves your machine and is never pasted into a chat.
 
 The parameter file is a bash file that `render.sh` sources, so it is code: keep it out of version control if it holds
 anything you would not publish. It never holds a secret: the database credentials are stack variables you type in Portainer.
@@ -204,7 +204,7 @@ server beforehand and the compose file names them. That is why `authorized_keys`
 host and not in the repository.
 
 **No route to the Docker network?** The compose file publishes no port (`expose:` only), which suits the reference infrastructure
-of section 1. If your Mac does not resolve the network's names or cannot reach it, add `ports:` for the web (80) and for sshd
+of section 1. If your machine does not resolve the network's names or cannot reach it, add `ports:` for the web (80) and for sshd
 (the `SSH_PORT`, 2222 by default), choose two free host ports, and point `APP_URL` and the alias's `HostName` and `Port` at the
 host: `stack/README.md` has the two blocks to add and the details. The compose file in the repository does not change.
 
@@ -232,7 +232,7 @@ From the project root; every command has the values of your project (`tools/dock
 | `tools/docker/ci-local.sh [<module> ...]` | the PHP matrix: install, validate, your `check` script, on every version |
 | `tools/docker/run.sh '<command>'` | one command on the server, inside the lock |
 | `tools/docker/snapshot.sh`, `reset.sh <name>` | database dump + archive of `/app`; put it back after you type its name |
-| `tools/docker/doctor.sh [--guide]` | check the stack from the Mac; print the setup steps with your values |
+| `tools/docker/doctor.sh [--guide]` | check the stack from your machine; print the setup steps with your values |
 | `tools/docker/install-perfex.sh <folder or zip>` | copy your Perfex CRM into `/app` |
 
 **The lock.** `locked.sh` is a file of the project folder, not of the image: `sync.sh` copies it to the server next to the
@@ -286,7 +286,7 @@ smallest complete script. `examples/extra/` has three to copy: Infection on the 
 ## 9. Security
 
 - **One door**: `ssh`, user `www-data`, key only. No root, no password, no Portainer, no Docker socket for scripts or agents.
-- **No secrets in files**: the database credentials are stack variables only; the private SSH key never leaves your Mac.
+- **No secrets in files**: the database credentials are stack variables only; the private SSH key never leaves your machine.
 - **A throw-away instance**: never real data, never a copy of a production database.
 - **The application's source is not in this repository** and not in yours: on the server it lives in `/app`, outside the code mirror.
 - **Changes to the instance's own files** (`.htaccess`, the application's configuration) only with a backup outside the web folder.
@@ -294,7 +294,7 @@ smallest complete script. `examples/extra/` has three to copy: Infection on the 
 
 Also: the sshd of the tools container allows `www-data` only, with `AllowTcpForwarding no` (switch on with `SSH_TCP_FORWARDING=1`);
 the web server lists no directories and reports no version; PHP-FPM is reachable from Apache only; `deploy.sh`, `ci-local.sh`,
-`snapshot.sh` and `reset.sh` accept only names from closed lists or strict patterns, checked on the Mac and again on the server.
+`snapshot.sh` and `reset.sh` accept only names from closed lists or strict patterns, checked on your machine and again on the server.
 
 ## 10. License
 

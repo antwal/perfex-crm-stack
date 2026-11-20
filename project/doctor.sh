@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Checks the stack from the Mac, over SSH and HTTP, and tells you what to fix. Changes nothing.
+# Checks the stack from your machine, over SSH and HTTP, and tells you what to fix. Changes nothing.
 # Usage: doctor.sh            run the checks (exit status = number of failed checks)
 #        doctor.sh --guide    print the setup steps with the values of stack.conf (the same steps as README.md, condensed)
 # Checks: SSH login with the key; PHP and Composer versions; /app and /repo are mounted and writable; the stack variables
 # are present in the SSH session (their NAMES only, never their values); the database answers; locked.sh is on the server
-# (sync.sh puts it there); the authorized key file is not empty; the application name resolves from the Mac; GET / answers
-# from the Mac and from the tools container. When ai/ was rendered (INCLUDE_AI=1): whether AGENTS.md and CLAUDE.md at the
+# (sync.sh puts it there); the authorized key file is not empty; the application name resolves from your machine; GET / answers
+# from your machine and from the tools container. When ai/ was rendered (INCLUDE_AI=1): whether AGENTS.md and CLAUDE.md at the
 # project root hold the test-instance section of ai/AGENTS-section.md (notes only, never a failure).
 # Values come from stack.conf, not from this file.
 set -uo pipefail
@@ -18,10 +18,10 @@ if [ "${1:-}" = "--guide" ]; then
     db_example="${STACK_NAME//-/_}"
     cat <<EOT
 Setup of the stack "$STACK_NAME": the steps with your values (README.md has the explanations).
-Run the Mac steps from the project root:   cd "$ROOT"
+Run the local steps from the project root:   cd "$ROOT"
 "SERVER" is how YOU log in to the server as root; an AI agent has no such access.
 
-1. Mac: a key and an alias
+1. Your machine: a key and an alias
    ssh-keygen -t ed25519 -f ~/.ssh/$SSH_ALIAS -C $SSH_ALIAS -N ""
    Add to ~/.ssh/config:
        Host $SSH_ALIAS
@@ -32,7 +32,7 @@ Run the Mac steps from the project root:   cd "$ROOT"
            IdentitiesOnly yes
    cat ~/.ssh/$SSH_ALIAS.pub      (copy the line: step 3 needs it)
 
-2. Mac: copy the build context of the two images to the server
+2. Your machine: copy the build context of the two images to the server
    rsync -av --delete $TEMPLATE_REL/stack/ root@SERVER:$REMOTE_ROOT/build/
 
 3. Server, as root: folders, key, images
@@ -49,7 +49,7 @@ Run the Mac steps from the project root:   cd "$ROOT"
 5. Portainer: Stacks > Add stack, name $STACK_NAME, web editor (paste stack/docker-compose.yml) or Git repository.
    Stack variables: load $DEST_DIR/portainer.env, then type the values of PERFEX_DB_HOST, PERFEX_DB_NAME, PERFEX_DB_USER, PERFEX_DB_PASSWORD (loaded empty).
 
-6. Mac: $DEST_DIR/doctor.sh      then, if the application is not installed yet:  $DEST_DIR/install-perfex.sh <your Perfex folder or zip>
+6. Your machine: $DEST_DIR/doctor.sh      then, if the application is not installed yet:  $DEST_DIR/install-perfex.sh <your Perfex folder or zip>
    and open $APP_URL in the browser to finish the installation.
 EOT
     exit 0
@@ -137,16 +137,16 @@ else
     fi
 fi
 
-echo "--- the application from this Mac"
+echo "--- the application from this machine"
 app_host="${APP_URL#*://}"; app_host="${app_host%%/*}"; app_host="${app_host%%:*}"
 rc=0
 out="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$APP_URL/" 2>&1)" || rc=$?
 if [ "$rc" -eq 6 ]; then
-    report "FAIL: $app_host does not resolve from this Mac: check the DNS that serves your Docker network names"
+    report "FAIL: $app_host does not resolve from this machine: check the DNS that serves your Docker network names"
 elif [ "$rc" -ne 0 ]; then
-    report "FAIL: $APP_URL/ does not answer from this Mac (curl exit $rc): the name resolves, but the web container cannot be reached"
+    report "FAIL: $APP_URL/ does not answer from this machine (curl exit $rc): the name resolves, but the web container cannot be reached"
 else
-    report "ok: $app_host resolves from this Mac"
+    report "ok: $app_host resolves from this machine"
     case "$out" in
         5??) report "FAIL: GET $APP_URL/ answers $out (look at the web container's logs in Portainer; 502 usually means PHP-FPM is down)" ;;
         *) report "ok: GET $APP_URL/ answers $out" ;;
