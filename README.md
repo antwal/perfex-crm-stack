@@ -46,6 +46,9 @@ perfex-crm-stack/
 ├── params.example.env     every parameter, commented, with its neutral default
 ├── render.sh              --check validates the parameters; otherwise it writes the PROJECT FOLDER (never stack/)
 ├── docs/                  the diagram of §1 as SVG, a light and a dark variant (GitHub picks one with the reader's theme)
+├── .github/               the automation of this repository, never rendered into your project
+│   ├── workflows/release.yml        checks CHANGELOG.md on every push; on a tag vX.Y.Z creates the GitHub Release from its section
+│   └── scripts/release-notes.sh     cuts the section of a version, with the fixed last line (--check reads the whole file); release-notes-test.sh tests it
 ├── stack/                 used as it is: paste into Portainer, or point a Git repository stack at it
 │   ├── README.md          the compose file, the variables, the two images, the optional second web instance
 │   ├── docker-compose.yml web + tools; stack variables with defaults; no build:, no secrets, no relative paths
@@ -299,3 +302,10 @@ the web server lists no directories and reports no version; PHP-FPM is reachable
 ## 10. License
 
 MIT, see `LICENSE`; the history is in `CHANGELOG.md`.
+
+**Versions.** A version is a signed tag `vX.Y.Z` with the message `Perfex CRM Stack Docker X.Y.Z`, and a GitHub Release whose body
+is the section of `CHANGELOG.md` of that version plus one fixed line: Perfex CRM is not part of this repository, bring your own
+licensed copy. The Release is written by `.github/workflows/release.yml` when the tag is pushed; the section must be the newest of
+the file (`[Unreleased]` is renamed into the version in the last commit before the tag), and
+`bash .github/scripts/release-notes.sh CHANGELOG.md X.Y.Z` prints the same body on your machine before you tag. The same workflow
+checks the form of the changelog on every push and pull request.

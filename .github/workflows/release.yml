@@ -1,0 +1,129 @@
+# The GitHub Release of a version of the template (a tag vX.Y.Z), and the check of CHANGELOG.md.
+#
+# Every push to main and every pull request runs `changelog`: the test of .github/scripts/release-notes.sh and the check of the form
+# of CHANGELOG.md (headings [Unreleased] or [X.Y.Z], [Unreleased] first and once, versions from the newest to the oldest, no empty
+# section), so that a mistake shows up before a tag exists.
+#
+# A push of a tag vX.Y.Z runs `release` too, the only job with write access. It reads the tag through the API (annotated, its
+# signature verified by GitHub with the key of the account, message "Perfex CRM Stack Docker X.Y.Z"), takes CHANGELOG.md from the
+# commit of the tag, cuts the section [X.Y.Z] with release-notes.sh (the section must be the newest one of the file: [Unreleased] is
+# renamed into the version in the last commit before the tag) and creates the Release with that section, plus the fixed last line
+# about the license of Perfex CRM, as its body. A Release is never overwritten: if it exists the command fails, and a wrong one is
+# deleted by hand. "Latest" goes to the highest version only.
+#
+# "Run workflow" (workflow_dispatch) does the same for a tag you name, with the scripts of the branch you run it from and the
+# changelog of the tag. With "dry run" (the default) it checks the tag, prints the title and the notes and creates nothing: that is
+# the rehearsal, on an existing tag, and the way to release again after a fix of this file is to run it without dry run. A tag pushed
+# before this file existed has no run of its own: name it here.
+#
+# No secret and no third-party action: the token is the one of the workflow, actions/checkout is pinned to a commit, gh and jq are
+# part of the runner. The name of the tag reaches the scripts as an environment variable, never as `${{ }}` inside a script.
+name: release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag vX.Y.Z to release, or to rehearse with dry run'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run: check the tag and print the notes, create no Release'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: the test of release-notes.sh
+        run: bash .github/scripts/release-notes-test.sh
+      - name: the form of CHANGELOG.md
+        run: bash .github/scripts/release-notes.sh --check CHANGELOG.md
+
+  release:
+    needs: changelog
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      DRY_RUN: ${{ inputs.dry_run }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: the tag, through the API (annotated, verified, its message; version, commit and title)
+        id: tag
+        run: |
+          if ! [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            if [ "$GITHUB_EVENT_NAME" = push ]; then echo "::notice::$TAG is not a version tag (vX.Y.Z): no Release"; exit 0; fi
+            echo "::error::$TAG is not a version tag (vX.Y.Z)"
+            exit 1
+          fi
+          VERSION="${BASH_REMATCH[1]}"
+          TITLE="Perfex CRM Stack Docker $VERSION"
+          gh api "repos/$GH_REPO/git/ref/tags/$TAG" > "$RUNNER_TEMP/ref.json"
+          if [ "$(jq -r .object.type "$RUNNER_TEMP/ref.json")" != tag ]; then echo "::error::$TAG is not an annotated tag"; exit 1; fi
+          gh api "repos/$GH_REPO/git/tags/$(jq -r .object.sha "$RUNNER_TEMP/ref.json")" > "$RUNNER_TEMP/tag.json"
+          if [ "$(jq -r .verification.verified "$RUNNER_TEMP/tag.json")" != true ]; then
+            echo "::error::the signature of $TAG is not verified by GitHub ($(jq -r .verification.reason "$RUNNER_TEMP/tag.json"))"
+            exit 1
+          fi
+          if [ "$(jq -r '.message | split("\n")[0]' "$RUNNER_TEMP/tag.json")" != "$TITLE" ]; then
+            echo "::error::the message of $TAG is not '$TITLE'"
+            exit 1
+          fi
+          {
+            echo "version=$VERSION"
+            echo "commit=$(jq -r .object.sha "$RUNNER_TEMP/tag.json")"
+            echo "title=$TITLE"
+          } >> "$GITHUB_OUTPUT"
+      # Two trees: the scripts from the ref this run is for (the tag itself after a push, the branch of a dispatch), the changelog
+      # from the commit of the tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.tag.outputs.version != ''
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.tag.outputs.version != ''
+        with:
+          ref: ${{ steps.tag.outputs.commit }}
+          path: tagged
+          persist-credentials: false
+      - name: the notes (the section of the version, the newest one of the changelog of the tag, and the fixed last line)
+        if: steps.tag.outputs.version != ''
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          bash .github/scripts/release-notes.sh tagged/CHANGELOG.md "$VERSION" > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+      - name: the Release (never overwritten; Latest only for the highest version)
+        if: steps.tag.outputs.version != ''
+        env:
+          TITLE: ${{ steps.tag.outputs.title }}
+        run: |
+          HIGHEST="$(gh api "repos/$GH_REPO/tags" --paginate --jq '.[].name' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+          LATEST=false
+          if [ "$HIGHEST" = "$TAG" ]; then LATEST=true; fi
+          if [ "$DRY_RUN" = true ]; then
+            echo "dry run: no Release created. It would be: tag $TAG, title '$TITLE', latest=$LATEST, body = the notes above"
+            exit 0
+          fi
+          gh release create "$TAG" --verify-tag --latest="$LATEST" --title "$TITLE" --notes-file "$RUNNER_TEMP/notes.md"

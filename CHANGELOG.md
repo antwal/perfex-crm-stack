@@ -4,12 +4,22 @@ The changes of each version of the template, in the format of [Keep a Changelog]
 numbered MAJOR.MINOR.PATCH. The functions of `project/lib.sh` listed in "Writing your own script" (the generated README) are the API
 of the scripts you write yourself: they keep their names and arguments until the next major version.
 
-## [Unreleased]
+## [0.3.1]
 
 ### Changed
 
 - The documents, the scripts and the diagram say "your machine" where they said "your Mac": the template was built on macOS,
   but Linux works and Windows through WSL (untested); the facts about macOS (bash 3.2, no flock) stay where they are.
+
+### Added
+
+- `.github/workflows/release.yml`: on every push and pull request it checks the form of this file (headings `[Unreleased]` or
+  `[X.Y.Z]`, `[Unreleased]` first and once, versions from the newest to the oldest, no empty section); on a tag `vX.Y.Z` it creates
+  the GitHub Release, with the section of the version as the body (it must be the newest section of the file at the tag) and the
+  fixed last line about the license of Perfex CRM. The tag must be annotated, with a signature GitHub verifies and the message
+  `Perfex CRM Stack Docker X.Y.Z`; a Release is never overwritten. `.github/scripts/release-notes.sh` cuts the section (and
+  `--check` reads the whole file), `release-notes-test.sh` tests it; "Run workflow" with dry run rehearses on an existing tag
+  without creating anything.
 
 ## [0.3.0]
 
