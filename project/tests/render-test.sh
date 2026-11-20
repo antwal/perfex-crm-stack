@@ -152,13 +152,19 @@ D="$R/${EXAMPLE_DEST:-tools/docker}"
 if [ "$st" -ne 0 ]; then bad "render failed: $(cat "$WORK/out")"
 else
     good "render writes the project folder"
-    for f in stack.conf portainer.env README.md lib.sh sync.sh deploy.sh ci-local.sh run.sh doctor.sh snapshot.sh reset.sh install-perfex.sh locked.sh extra/README.md tests/deploy-test.sh tests/locked-test.sh tests/scripts-test.sh tests/render-test.sh ai/PROMPT.md ai/CLAUDE-section.md ai/memory-note.md; do
+    for f in stack.conf portainer.env README.md lib.sh sync.sh deploy.sh ci-local.sh run.sh doctor.sh snapshot.sh reset.sh install-perfex.sh locked.sh extra/README.md tests/deploy-test.sh tests/locked-test.sh tests/scripts-test.sh tests/render-test.sh ai/PROMPT.md ai/AGENTS-section.md ai/memory-note.md; do
         [ -f "$D/$f" ] || bad "missing in the project folder: $f"
     done
     if [ "$(ls -A "$D/extra" | tr '\n' ' ')" = "README.md " ] && ( . "$BASE"; grep -q "$SSH_ALIAS" "$D/extra/README.md" ) && grep -q 'This folder is yours' "$D/extra/README.md"; then
         good "extra/ holds the README.md and nothing else, with the values of the project in it"
     else
         bad "extra/ is not the README.md alone: $(ls -A "$D/extra" 2>&1 | tr '\n' ' ')"
+    fi
+    if [ -f "$D/ai/AGENTS-section.md" ] && grep -q 'perfex-crm-stack: test instance, begin' "$D/ai/AGENTS-section.md" \
+        && grep -q 'perfex-crm-stack: test instance, end' "$D/ai/AGENTS-section.md" && [ ! -e "$D/ai/CLAUDE-section.md" ]; then
+        good "ai/AGENTS-section.md is written with its two markers, and no CLAUDE-section.md is left"
+    else
+        bad "ai/AGENTS-section.md is missing, has no markers, or an old CLAUDE-section.md is still written"
     fi
     for f in "$D"/*.sh "$D"/tests/*.sh; do
         [ -x "$f" ] || bad "not executable: $f"

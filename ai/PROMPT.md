@@ -1,6 +1,6 @@
 # Prompts for an AI agent
 
-Two ready prompts for an AI agent with shell access (Claude Code or another): **A** to connect to a stack that already runs,
+Two ready prompts for an AI agent with shell access on your Mac (Claude Code, Codex, Copilot in agent mode or another): **A** to connect to a stack that already runs,
 **B** to build a new one. Copy one, fill the blanks of its table (the rows with a value already have the default), and
 paste it in a new session opened at the **root of your project**. They assume the template is in the project as
 `perfex-crm-stack/`, the name a clone gets; if it is somewhere else, change the path.
@@ -26,8 +26,10 @@ This project uses a test instance on a remote Docker server that is already runn
    `ssh <SSH_ALIAS> 'php -v | head -1; composer --version; ls /app /repo'` and show me the output. If it fails, tell me:
    do not try other users, ports, keys or passwords.
 4. Run `<DEST_DIR>/doctor.sh` and show me the output.
-5. Add the section of `<DEST_DIR>/ai/CLAUDE-section.md` to this project's CLAUDE.md (create the file if it is missing) and
-   keep the note `<DEST_DIR>/ai/memory-note.md` in your memory.
+5. Install `<DEST_DIR>/ai/AGENTS-section.md` as its header says: between its two markers, in the instruction file your tool
+   reads at the project root (`AGENTS.md`; for Claude Code `CLAUDE.md`, which may just import it with `@AGENTS.md`), creating
+   the file if it is missing; show me the result and commit nothing. If you are Claude Code, also keep
+   `<DEST_DIR>/ai/memory-note.md` in your memory.
 6. From now on use only the scripts in `<DEST_DIR>` and `ssh <SSH_ALIAS>`. The daily commands are in
    `<DEST_DIR>/README.md`, section 2.
 
@@ -74,9 +76,10 @@ stop for my answer where a step says so.
    `<DEST_DIR>/install-perfex.sh` with my own licensed copy of Perfex CRM (if I do not own a license yet, I buy it at
    https://codecanyon.net/item/perfex-powerful-open-source-crm/14013737), and wait: the installation wizard in the
    browser is mine.
-7. Add `<DEST_DIR>/ai/CLAUDE-section.md` to this project's CLAUDE.md, keep `<DEST_DIR>/ai/memory-note.md` in your memory,
-   run `bash <DEST_DIR>/tests/deploy-test.sh` and `bash <DEST_DIR>/tests/locked-test.sh`, and finish with a summary: what
-   works, what is missing, the daily commands.
+7. Install `<DEST_DIR>/ai/AGENTS-section.md` as its header says (in `AGENTS.md`, or `CLAUDE.md` for Claude Code, between its
+   two markers, creating the file if it is missing; commit nothing); if you are Claude Code, also keep
+   `<DEST_DIR>/ai/memory-note.md` in your memory. Then run `bash <DEST_DIR>/tests/deploy-test.sh` and
+   `bash <DEST_DIR>/tests/locked-test.sh`, and finish with a summary: what works, what is missing, the daily commands.
 
 Rules: no secrets in files, chat, logs or commits; never type credentials for me in a browser; no change to the instance's
 own files without asking me first; you have no root, Portainer or Docker socket access and you do not ask for it; touch
@@ -111,3 +114,6 @@ Parameters:
 - `params.env` is a bash file that `render.sh` sources: keep it out of version control if it holds anything you would not publish.
 - The template folder (a clone or a copy), the temporary folder `LOCAL_TMP_DIR` and your copy of Perfex CRM are not part of
   your repository: the prompts have the agent add them to `.gitignore`. A submodule is recorded by git itself and is not ignored.
+- `ai/AGENTS-section.md` is the same text for every tool; its header says which file each tool reads (`AGENTS.md`, `CLAUDE.md`,
+  `.github/copilot-instructions.md`) and tells an agent to install it there if it is missing. The prompts are for an agent on
+  your Mac: a cloud agent (the Copilot coding agent, Codex cloud) reads the rules but has no SSH key and no route to the Docker network.

@@ -5,8 +5,10 @@ with the PHP matrix, integration tests and throw-away snapshots, reachable throu
 SSH, key only. The stack runs on Portainer; you paste one compose file (or point a Git repository stack at it), and a small
 generator writes the scripts and documents for your project.
 
-It also works for an AI agent with a shell (Claude Code or another): the agent gets the scripts and a prompt, never root,
-Portainer, the Docker socket or your database password. See `ai/`.
+It also works for an AI agent with a shell on your Mac (Claude Code, Codex, Copilot in agent mode or another): the agent gets
+the scripts, a prompt and a section for its instruction file (`AGENTS.md`, `CLAUDE.md` or `.github/copilot-instructions.md`),
+never root, Portainer, the Docker socket or your database password. A cloud agent reads the rules but has no SSH key and no
+route to the Docker network. See `ai/`.
 
 **Perfex CRM is not part of this repository and never will be.** It is proprietary: you bring your own licensed copy
 (`install-perfex.sh` copies it to the server); if you do not own a license yet, buy it on CodeCanyon:
@@ -86,8 +88,8 @@ perfex-crm-stack/
 │       └── e2e.sh               a Playwright suite of your project against the instance
 └── ai/                    optional (INCLUDE_AI=1): what an AI agent with a shell gets, rendered with your values
     ├── PROMPT.md          two ready prompts: connect to a stack that already runs, or build a new one
-    ├── CLAUDE-section.md  a section to paste in the project's CLAUDE.md: how the instance is reached, the rules
-    └── memory-note.md     a memory note for the agent: addresses, scripts, what it never asks for
+    ├── AGENTS-section.md  the section for the agent's instruction file (AGENTS.md; CLAUDE.md for Claude Code; copilot-instructions.md for Copilot Chat)
+    └── memory-note.md     a memory note for Claude Code: addresses, scripts, what it never asks for
 ```
 
 ## 3. Quick start
