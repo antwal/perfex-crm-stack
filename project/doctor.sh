@@ -5,7 +5,8 @@
 # Checks: SSH login with the key; PHP and Composer versions; /app and /repo are mounted and writable; the stack variables
 # are present in the SSH session (their NAMES only, never their values); the database answers; locked.sh is on the server
 # (sync.sh puts it there); the authorized key file is not empty; the application name resolves from the Mac; GET / answers
-# from the Mac and from the tools container.
+# from the Mac and from the tools container. When ai/ was rendered (INCLUDE_AI=1): whether AGENTS.md and CLAUDE.md at the
+# project root hold the test-instance section of ai/AGENTS-section.md (notes only, never a failure).
 # Values come from stack.conf, not from this file.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd -P)"
@@ -150,6 +151,25 @@ else
         5??) report "FAIL: GET $APP_URL/ answers $out (look at the web container's logs in Portainer; 502 usually means PHP-FPM is down)" ;;
         *) report "ok: GET $APP_URL/ answers $out" ;;
     esac
+fi
+
+if [ -f "$HERE/ai/AGENTS-section.md" ]; then
+    echo "--- the instruction files of your AI agent (notes only)"
+    marker="perfex-crm-stack: test instance, begin"
+    for f in AGENTS.md CLAUDE.md; do
+        if [ ! -f "$ROOT/$f" ]; then
+            report "note: $f is missing at the project root: an agent that reads it knows nothing of the instance ($DEST_DIR/ai/AGENTS-section.md says where it goes)"
+        elif grep -qF "$marker" "$ROOT/$f"; then
+            report "ok: $f holds the test-instance section"
+        elif [ "$f" = CLAUDE.md ] && grep -qE '^@AGENTS\.md[[:space:]]*$' "$ROOT/$f" && [ -f "$ROOT/AGENTS.md" ] && grep -qF "$marker" "$ROOT/AGENTS.md"; then
+            report "ok: CLAUDE.md imports AGENTS.md, which holds the test-instance section"
+        else
+            report "note: $f has no test-instance section: add $DEST_DIR/ai/AGENTS-section.md to it, between its two markers"
+        fi
+    done
+    if [ -f "$ROOT/.github/copilot-instructions.md" ] && ! grep -qF "$marker" "$ROOT/.github/copilot-instructions.md"; then
+        report "note: .github/copilot-instructions.md exists without the test-instance section (Copilot Chat reads only that file)"
+    fi
 fi
 
 echo

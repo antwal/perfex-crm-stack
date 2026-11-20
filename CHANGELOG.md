@@ -4,6 +4,26 @@ The changes of each version of the template, in the format of [Keep a Changelog]
 numbered MAJOR.MINOR.PATCH. The functions of `project/lib.sh` listed in "Writing your own script" (the generated README) are the API
 of the scripts you write yourself: they keep their names and arguments until the next major version.
 
+## [0.3.0]
+
+### Changed
+
+- `ai/CLAUDE-section.md` is now `ai/AGENTS-section.md`: the same section for every AI agent, wrapped in two markers
+  (`perfex-crm-stack: test instance, begin` and `end`). Its header says which file each tool reads (`AGENTS.md` for Codex,
+  Copilot and the other tools that read it; `CLAUDE.md` for Claude Code, which can import `AGENTS.md` with `@AGENTS.md`;
+  `.github/copilot-instructions.md` for Copilot Chat only) and tells an agent that finds the section missing from its file to
+  add it there, between the markers, without committing. The two prompts of `ai/PROMPT.md` say the same; `ai/memory-note.md`
+  is for Claude Code only.
+- README: the tree of §2 lists every file with what it does; the reference infrastructure of §1 is an SVG diagram in `docs/`
+  (a light and a dark variant) instead of the ASCII sketch; the notes on AI agents name Codex and Copilot next to Claude Code
+  and say that a cloud agent has no SSH key and no route to the Docker network.
+
+### Added
+
+- `doctor.sh`, when `ai/` was rendered: notes (never failures) on `AGENTS.md` and `CLAUDE.md` at the project root, whether they
+  hold the test-instance section (or `CLAUDE.md` imports `AGENTS.md`), and on a `.github/copilot-instructions.md` that exists
+  without it. `tests/scripts-test.sh` covers the three cases; `tests/render-test.sh` checks the new file and its markers.
+
 ## [0.2.0]
 
 ### Added

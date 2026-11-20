@@ -545,6 +545,36 @@ else
 fi
 STACK_TEST_SSH_REPORT="$WORK/report" STACK_TEST_CURL_OUT=502 STACK_TEST_CURL_STATUS=0 sh_run doctor.sh
 if [ "$STATUS" -eq 3 ] && grep -q 'FAIL: GET .* answers 502' "$WORK/out"; then good "doctor.sh: a 502 from the application is a failure"; else bad "doctor.sh: a 502 was not counted (status $STATUS)"; fi
+# the notes on the instruction files of the AI agent: only when ai/ was rendered (INCLUDE_AI=1); never a failure
+if [ -f "$DOCKER_DIR/ai/AGENTS-section.md" ]; then
+    mkdir -p "$WORK/docker/ai"; cp "$DOCKER_DIR/ai/AGENTS-section.md" "$WORK/docker/ai/"
+    rm -rf "$WORK/AGENTS.md" "$WORK/CLAUDE.md" "$WORK/.github"
+    STACK_TEST_SSH_REPORT="$WORK/report" STACK_TEST_CURL_OUT=302 STACK_TEST_CURL_STATUS=0 sh_run doctor.sh
+    if [ "$STATUS" -eq 2 ] && grep -q 'note: AGENTS.md is missing' "$WORK/out" && grep -q 'note: CLAUDE.md is missing' "$WORK/out"; then
+        good "doctor.sh: a missing AGENTS.md and CLAUDE.md are two notes, not failures (the status stays 2)"
+    else
+        bad "doctor.sh: the notes on the missing instruction files misbehaved (status $STATUS): $(cat "$WORK/out")"
+    fi
+    printf '%s\n' '# my project' '<!-- perfex-crm-stack: test instance, begin -->' 'the rules' '<!-- perfex-crm-stack: test instance, end -->' > "$WORK/AGENTS.md"
+    printf '%s\n' '@AGENTS.md' > "$WORK/CLAUDE.md"
+    STACK_TEST_SSH_REPORT="$WORK/report" STACK_TEST_CURL_OUT=302 STACK_TEST_CURL_STATUS=0 sh_run doctor.sh
+    if [ "$STATUS" -eq 2 ] && grep -q 'ok: AGENTS.md holds the test-instance section' "$WORK/out" && grep -q 'ok: CLAUDE.md imports AGENTS.md' "$WORK/out"; then
+        good "doctor.sh: AGENTS.md with the section and CLAUDE.md with @AGENTS.md are both ok"
+    else
+        bad "doctor.sh: the ok path of the instruction files misbehaved (status $STATUS): $(cat "$WORK/out")"
+    fi
+    printf '%s\n' '# my project' 'no section here' > "$WORK/CLAUDE.md"
+    mkdir -p "$WORK/.github"; printf '%s\n' 'chat rules' > "$WORK/.github/copilot-instructions.md"
+    STACK_TEST_SSH_REPORT="$WORK/report" STACK_TEST_CURL_OUT=302 STACK_TEST_CURL_STATUS=0 sh_run doctor.sh
+    if [ "$STATUS" -eq 2 ] && grep -q 'note: CLAUDE.md has no test-instance section' "$WORK/out" && grep -q 'note: .github/copilot-instructions.md exists without' "$WORK/out"; then
+        good "doctor.sh: a CLAUDE.md without the section and a copilot-instructions.md without it are notes"
+    else
+        bad "doctor.sh: the note path of the instruction files misbehaved (status $STATUS): $(cat "$WORK/out")"
+    fi
+    rm -rf "$WORK/AGENTS.md" "$WORK/CLAUDE.md" "$WORK/.github"
+else
+    echo "skipped: no ai/AGENTS-section.md in this folder (INCLUDE_AI=0): the notes of doctor.sh on the instruction files are not tested"
+fi
 
 [ "$fail" -eq 0 ] && echo "=== scripts-test: all ok ===" || echo "=== scripts-test: FAILED ==="
 exit "$fail"
