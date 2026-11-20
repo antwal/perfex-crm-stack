@@ -25,12 +25,14 @@ The template documents the setup it was built on, as a reference. Adapt it, or k
 | Your Mac | bash 3.2 or later, ssh, rsync, curl, perl (all in macOS; Linux works, Windows only through WSL and untested) |
 | Root on the server | for a handful of one-time steps (folders, images). Daily use needs none |
 
-```
- Mac ──ssh (key)──▶ tools container ───▶ /app  (the application files)     ◀── web container (Apache + PHP-FPM)
-      (alias, port 2222)   PHP 8.1–8.5, Composer, rsync,   /repo (mirror of your code)       ▲
-                           MariaDB client, snapshots, lock  └─▶ MariaDB (outside the stack)   │
- Mac ──http───────────────────────────────────────────────────────────────────────────────────┘
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/reference-infrastructure-dark.svg">
+  <img src="docs/reference-infrastructure.svg" width="680" alt="Your Mac reaches the web container over http and the tools container over ssh with a key. Both run in a Portainer stack on a Docker host and share /app, the application files; the tools container also holds /repo, a mirror of your code. MariaDB and an optional Mailpit already run on the same Docker network, outside the stack.">
+</picture>
+
+The tools container has PHP 8.1 to 8.5, Composer, rsync and the MariaDB client: the snapshots and the lock live there. The
+web container serves `/app` and talks to MariaDB and, for the test mail, to Mailpit, whose web interface your Mac opens too.
+No port is published: the Mac reaches both containers by name, over the Docker network.
 
 ## 2. What is in the folder
 
@@ -41,6 +43,7 @@ perfex-crm-stack/
 ├── CHANGELOG.md           what changed in each version of the template
 ├── params.example.env     every parameter, commented, with its neutral default
 ├── render.sh              --check validates the parameters; otherwise it writes the PROJECT FOLDER (never stack/)
+├── docs/                  the diagram of §1 as SVG, a light and a dark variant (GitHub picks one with the reader's theme)
 ├── stack/                 used as it is: paste into Portainer, or point a Git repository stack at it
 │   ├── README.md          the compose file, the variables, the two images, the optional second web instance
 │   ├── docker-compose.yml web + tools; stack variables with defaults; no build:, no secrets, no relative paths
