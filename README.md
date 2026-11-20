@@ -45,9 +45,15 @@ perfex-crm-stack/
 │   ├── README.md          the compose file, the variables, the two images, the optional second web instance
 │   ├── docker-compose.yml web + tools; stack variables with defaults; no build:, no secrets, no relative paths
 │   ├── web-extra.yml      optional second web instance (another PHP version)
-│   ├── web/               Dockerfile, entrypoint.sh, apache/000-default.conf, php/uploads.ini
+│   ├── web/               the build context of the web image (built on the server, one per PHP version)
+│   │   ├── Dockerfile               php:<PHP_VERSION>-fpm with Apache in front and the extensions Perfex needs; installer pinned by version and SHA-256
+│   │   ├── entrypoint.sh            PHP-FPM in the background, Apache as process 1; PASS_AUTHORIZATION=1 writes CGIPassAuth On
+│   │   ├── apache/000-default.conf  the virtual host: PHP over proxy_fcgi to 127.0.0.1:9000, no directory listing
+│   │   └── php/uploads.ini          file_uploads On, memory_limit 128M, upload and post 64M, max_execution_time 30
 │   ├── tools.Dockerfile   PHP versions from Sury, Composer, sshd, rsync, MariaDB client, optional Node
-│   └── tools/             entrypoint.sh, sshd_config
+│   └── tools/             the two files the tools image copies
+│       ├── entrypoint.sh            persistent host keys, the stack variables in every SSH session, optional forwarding, sshd in the foreground
+│       └── sshd_config              www-data only, key only, no root, no password, no forwarding; the Include stays the first line
 ├── project/               the MODEL of the folder render.sh writes into your project (the only place with your values)
 │   ├── README.md          the runbook of your instance, with your values filled in
 │   ├── stack.conf         the values of your project, read by every script below
@@ -63,15 +69,22 @@ perfex-crm-stack/
 │   ├── install-perfex.sh  copies your Perfex CRM (a folder or a zip) into /app
 │   ├── locked.sh          runs on the server: one heavy job at a time (flock), low priority, its process group ended with the job
 │   ├── extra/             README.md only: your own scripts, never touched by render.sh --force
-│   └── tests/             deploy-test.sh, locked-test.sh, scripts-test.sh, render-test.sh (a fake ssh and rsync: no server is touched)
-├── examples/
+│   └── tests/             four tests with a fake ssh, rsync and curl: no server is touched
+│       ├── deploy-test.sh           deploy.sh from the Mac, and its server script against a folder tree
+│       ├── locked-test.sh           run.sh and locked.sh
+│       ├── scripts-test.sh          ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh, doctor.sh and the scripts of examples/extra/ (fake git and npx too)
+│       └── render-test.sh           render.sh with good and bad parameters (it finds the template through TEMPLATE_REL, or STACK_TEMPLATE_DIR)
+├── examples/              neutral examples: a parameter file, a module, three scripts for extra/
 │   ├── params/example.env       a filled-in parameter file with neutral values
 │   ├── module/sample_module/    the smallest module that goes through all of it, with unit and integration tests
 │   └── extra/                   scripts to copy into the generated extra/ folder (tested by scripts-test.sh)
 │       ├── infection-diff.sh    Infection on the changed files of a module, on the server, inside the lock
 │       ├── bench.sh             response times of one URL from the Mac, with percentiles
 │       └── e2e.sh               a Playwright suite of your project against the instance
-└── ai/                    optional: PROMPT.md, CLAUDE-section.md, memory-note.md
+└── ai/                    optional (INCLUDE_AI=1): what an AI agent with a shell gets, rendered with your values
+    ├── PROMPT.md          two ready prompts: connect to a stack that already runs, or build a new one
+    ├── CLAUDE-section.md  a section to paste in the project's CLAUDE.md: how the instance is reached, the rules
+    └── memory-note.md     a memory note for the agent: addresses, scripts, what it never asks for
 ```
 
 ## 3. Quick start
