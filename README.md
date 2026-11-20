@@ -50,8 +50,18 @@ perfex-crm-stack/
 │   └── tools/             entrypoint.sh, sshd_config
 ├── project/               the MODEL of the folder render.sh writes into your project (the only place with your values)
 │   ├── README.md          the runbook of your instance, with your values filled in
-│   ├── stack.conf  portainer.env
-│   ├── lib.sh  sync.sh  deploy.sh  ci-local.sh  run.sh  doctor.sh  snapshot.sh  reset.sh  install-perfex.sh  locked.sh
+│   ├── stack.conf         the values of your project, read by every script below
+│   ├── portainer.env      the stack variables to load in Portainer (the four PERFEX_DB_* empty: you type them there)
+│   ├── lib.sh             shared helpers and validators, sourced by the other scripts (and by yours in extra/)
+│   ├── sync.sh            mirrors your code folder to /repo/<SYNC_DIR> on the server, and puts locked.sh there
+│   ├── deploy.sh          sync, then copies a module into the application in development mode (.stack-managed marker, --adopt)
+│   ├── ci-local.sh        the PHP matrix on the server: composer install, validate --strict, your check script, per version
+│   ├── run.sh             one command on the server, inside the lock
+│   ├── doctor.sh          checks the stack from the Mac; --guide prints the setup steps with your values
+│   ├── snapshot.sh        a dump of the database and an archive of /app, kept on the server
+│   ├── reset.sh           puts a snapshot back, after you type its name (--list shows them)
+│   ├── install-perfex.sh  copies your Perfex CRM (a folder or a zip) into /app
+│   ├── locked.sh          runs on the server: one heavy job at a time (flock), low priority, its process group ended with the job
 │   ├── extra/             README.md only: your own scripts, never touched by render.sh --force
 │   └── tests/             deploy-test.sh, locked-test.sh, scripts-test.sh, render-test.sh (a fake ssh and rsync: no server is touched)
 ├── examples/
