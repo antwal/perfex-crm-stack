@@ -4,6 +4,10 @@
 # request must reach the server in the shape the server-side scripts expect, and doctor.sh must count what the server
 # reports. (deploy.sh has its own test, tests/deploy-test.sh; run.sh and locked.sh tests/locked-test.sh.)
 #
+# The job of ci-local.sh reaches the server as a script on the standard input. This test takes that very text from the recorded
+# call and runs it against a folder tree standing in for the server (STACK_SERVER_ROOT), with a fake composer and a fake php: a
+# module with a composer.json takes the Composer road, one without it php -l on its PHP files and then the check file.
+#
 # It also tests the example scripts of the template, examples/extra/ (infection-diff.sh, bench.sh, e2e.sh): it finds the
 # template through TEMPLATE_REL of stack.conf, or STACK_TEMPLATE_DIR, copies them into the work folder as if they were in
 # this project's extra/ folder, and runs them with the same fakes. If the template has no examples/extra/ (this folder was
@@ -20,14 +24,18 @@ ROOT="$(cd "$DOCKER_DIR/$PROJECT_ROOT_REL" && pwd -P)"
 WORK="${STACK_TESTS_WORK:-$ROOT/$LOCAL_TMP_DIR/stack-tests}/scripts-test"
 
 rm -rf "$WORK"
-mkdir -p "$WORK/bin" "$WORK/docker" "$WORK/src/sample_mod"
+mkdir -p "$WORK/bin" "$WORK/fakebin" "$WORK/docker" "$WORK/src/sample_mod" "$WORK/src/plain_mod"
 cp "$DOCKER_DIR"/*.sh "$WORK/docker/"
 sed -e 's#^PROJECT_ROOT_REL=.*#PROJECT_ROOT_REL=".."#' -e 's#^SYNC_DIR=.*#SYNC_DIR="src"#' \
     -e 's#^CI_MODULES=.*#CI_MODULES=""#' -e 's#^CI_STATIC_SCRIPT=.*#CI_STATIC_SCRIPT=""#' \
     "$DOCKER_DIR/stack.conf" > "$WORK/docker/stack.conf"
 # shellcheck disable=SC1091
 . "$WORK/docker/stack.conf"
+# a stack.conf written by a template older than 0.4.0 has no CI_CHECK_FILE (the scripts take the same default)
+CI_CHECK_FILE="${CI_CHECK_FILE:-tests/check.sh}"
+# sample_mod has a composer.json (the Composer road of ci-local.sh), plain_mod has none (the plain road)
 : > "$WORK/src/sample_mod/sample_mod.php"; echo '{}' > "$WORK/src/sample_mod/composer.json"
+echo '<?php' > "$WORK/src/plain_mod/plain_mod.php"
 # the example scripts of the template, as if they sat in this folder's extra/
 TEMPLATE_DIR="${STACK_TEMPLATE_DIR:-$ROOT/$TEMPLATE_REL}"
 HAVE_EXAMPLES=0
@@ -108,6 +116,21 @@ refused() { # refused <label> <script> <args...>: no success and no call at all
     if [ "$STATUS" -eq 0 ] || [ -s "$CALLS" ]; then bad "$label was not refused (status $STATUS, calls: $(cat "$CALLS"))"; else good "$label refused, no call made"; fi
 }
 called() { grep -qF -- "$1" "$CALLS"; }
+locked_job() { # locked_job: what locked.sh received in the last run, parsed back from the recorded ssh call: the number of words, then the command
+    local f
+    for f in "$CALLS".arg2.*; do
+        [ -f "$f" ] || continue
+        case "$(cat "$f")" in
+            "bash "*locked.sh*) bash -c 'eval "set -- ${1#bash }"; printf "%s\n" "$#"; printf "%s" "$2"' _ "$(cat "$f")"; return ;;
+        esac
+    done
+}
+job_words() { locked_job | sed -n 1p; }
+job_text() { locked_job | sed '1d'; }
+call_line() { grep -nF -- "$1" "$CALLS" | head -n 1 | cut -d: -f1; }
+stdin_script() { # stdin_script: the file that holds the script an ssh call received on its standard input (the first one that is not empty)
+    ls "$CALLS".stdin.* | while read -r f; do [ -s "$f" ] && echo "$f"; done | head -n 1
+}
 
 # ---- ci-local.sh -------------------------------------------------------------------------------------------------------------
 echo "--- ci-local.sh"
@@ -119,14 +142,202 @@ MATRIX_PHP_VERSIONS='8.4;id' refused "a PHP version with a command" ci-local.sh 
 MATRIX_PHP_VERSIONS='8.9' refused "a PHP version the image does not have" ci-local.sh sample_mod
 STATIC_PHP='7.4' refused "a static PHP version the image does not have" ci-local.sh sample_mod
 MATRIX_PHP_VERSIONS="$DEFAULT_PHP" SKIP_STATIC=1 sh_run ci-local.sh sample_mod
-if [ "$STATUS" -eq 0 ] && grep -q 'matrix green' "$WORK/out" \
-    && called "[bash $LOCKED_SH " && called "composer\\ validate\\ --strict" && called "/opt/php/$DEFAULT_PHP"; then
-    good "ci-local.sh: a valid run goes through locked.sh, validates and checks, and reports green"
+if [ "$STATUS" -eq 0 ] && grep -q 'matrix green' "$WORK/out" && called "[bash $LOCKED_SH "; then
+    good "ci-local.sh: a valid run goes through locked.sh and reports green"
 else
     bad "ci-local.sh: a valid run misbehaved (status $STATUS): $(cat "$WORK/out") / $(cat "$CALLS")"
 fi
+# the road is chosen on the server: no probe of composer.json before the job, so one call for the folders and one for the job
+if [ "$(grep -c '^ssh ' "$CALLS" | tr -d ' ')" -eq 2 ] && ! grep -F 'ssh [' "$CALLS" | grep -qF 'composer.json'; then
+    good "ci-local.sh: two ssh calls only (the folders of sync.sh and the job), and none asks for composer.json"
+else
+    bad "ci-local.sh: the ssh calls are not the folders and the job alone: $(cat "$CALLS")"
+fi
+if [ "$(job_words)" -eq 2 ] && [ "$(job_text)" = "bash -s -- $DEFAULT_PHP src sample_mod tests/check.sh check" ]; then
+    good "ci-local.sh: the job is a script on the standard input, with the PHP version, folder, module, check file and check script as parameters"
+else
+    bad "ci-local.sh: the job that reached locked.sh is not as expected ($(job_words) words): $(job_text)"
+fi
+CI_SCRIPT="$(stdin_script)"
+if [ -n "$CI_SCRIPT" ] && grep -qF 'composer validate --strict --no-check-version' "$CI_SCRIPT" && grep -qF 'php -l' "$CI_SCRIPT" && grep -qF 'syntax check only' "$CI_SCRIPT" \
+    && ! grep -qF 'sample_mod' "$CI_SCRIPT" && ! grep -qF 'tests/check.sh' "$CI_SCRIPT"; then
+    good "ci-local.sh: the script holds both roads, and none of your values (module, check file) is pasted into its text"
+    cp "$CI_SCRIPT" "$WORK/ci-remote.sh"
+else
+    bad "ci-local.sh: the script on the standard input is missing, lacks a road, or carries a value of yours: ${CI_SCRIPT:-none}"
+fi
 MATRIX_PHP_VERSIONS="$DEFAULT_PHP" SKIP_STATIC=1 STACK_TEST_LOCKED_STATUS=1 sh_run ci-local.sh sample_mod
 if [ "$STATUS" -ne 0 ] && grep -q 'matrix RED' "$WORK/out"; then good "ci-local.sh: a failing job makes the matrix red and the exit status non-zero"; else bad "ci-local.sh: a failing job was not reported (status $STATUS)"; fi
+
+# a module without a composer.json is no longer skipped: it is a job like any other, and the server chooses its road
+MATRIX_PHP_VERSIONS="$DEFAULT_PHP" SKIP_STATIC=1 sh_run ci-local.sh plain_mod
+if [ "$STATUS" -eq 0 ] && grep -q 'matrix green' "$WORK/out" && ! grep -q 'skipped' "$WORK/out" && [ "$(grep -c '^ssh ' "$CALLS" | tr -d ' ')" -eq 2 ] \
+    && [ "$(job_words)" -eq 2 ] && [ "$(job_text)" = "bash -s -- $DEFAULT_PHP src plain_mod tests/check.sh check" ]; then
+    good "ci-local.sh: a module without a composer.json is not skipped: the same two calls, the same job with its own name"
+else
+    bad "ci-local.sh: a module without a composer.json misbehaved (status $STATUS): $(cat "$WORK/out") / $(cat "$CALLS")"
+fi
+cp "$WORK/docker/stack.conf" "$WORK/stack.conf.ci-keep"
+set_conf() { # set_conf <name> <value>: the work copy of stack.conf with that one value replaced (or added)
+    grep -v "^$1=" "$WORK/stack.conf.ci-keep" > "$WORK/docker/stack.conf"
+    printf '%s="%s"\n' "$1" "$2" >> "$WORK/docker/stack.conf"
+}
+set_conf CI_CHECK_FILE ci/run.php
+MATRIX_PHP_VERSIONS="$DEFAULT_PHP" SKIP_STATIC=1 sh_run ci-local.sh plain_mod
+if [ "$STATUS" -eq 0 ] && [ "$(job_text)" = "bash -s -- $DEFAULT_PHP src plain_mod ci/run.php check" ]; then good "ci-local.sh: CI_CHECK_FILE of stack.conf reaches the job as the check file"; else bad "ci-local.sh: CI_CHECK_FILE of stack.conf was not passed (status $STATUS): $(job_text)"; fi
+grep -v '^CI_CHECK_FILE=' "$WORK/stack.conf.ci-keep" > "$WORK/docker/stack.conf"
+MATRIX_PHP_VERSIONS="$DEFAULT_PHP" SKIP_STATIC=1 sh_run ci-local.sh plain_mod
+if [ "$STATUS" -eq 0 ] && [ "$(job_text)" = "bash -s -- $DEFAULT_PHP src plain_mod tests/check.sh check" ]; then good "ci-local.sh: a stack.conf without CI_CHECK_FILE (written before 0.4.0) gets tests/check.sh"; else bad "ci-local.sh: the default check file was not used (status $STATUS): $(job_text)"; fi
+for hostile in '../x.sh' '/abs/x.sh' 'tests//check.sh' 'tests/check.txt' 'a b.sh' 'tests/check.sh;id' '.hidden/x.sh' 'tests/a..b.sh'; do
+    set_conf CI_CHECK_FILE "$hostile"
+    refused "a CI_CHECK_FILE of \"$hostile\" in stack.conf" ci-local.sh plain_mod
+done
+# the static analysis of a module without a composer.json is skipped on the server, before anything is installed
+cp "$WORK/stack.conf.ci-keep" "$WORK/docker/stack.conf"
+set_conf MATRIX_PHP_VERSIONS ""
+printf '%s\n' 'CI_STATIC_SCRIPT="stan"' >> "$WORK/docker/stack.conf"
+sh_run ci-local.sh plain_mod
+job="$(job_text)"
+if [ "$STATUS" -eq 0 ] && [ "$(grep -c "^ssh .*locked.sh" "$CALLS" | tr -d ' ')" -eq 1 ] \
+    && case "$job" in *"[ -f composer.json ] ||"*"rm -rf vendor"*) true ;; *) false ;; esac && grep -q 'static analysis of plain_mod' "$WORK/out"; then
+    good "ci-local.sh: the static analysis is one job that tests composer.json before rm -rf vendor, so a module without one is skipped there"
+else
+    bad "ci-local.sh: the static analysis job is not as expected (status $STATUS): $job / $(cat "$CALLS")"
+fi
+cp "$WORK/stack.conf.ci-keep" "$WORK/docker/stack.conf"
+
+# ---- ci-local.sh, the job on the server: the very script that reached the standard input, run against a folder tree --------------------
+echo "--- ci-local.sh: the script of the server, against a folder tree"
+if [ ! -s "$WORK/ci-remote.sh" ]; then
+    bad "no server script was captured from ci-local.sh"
+else
+    SRV="$WORK/server"; COMPOSER_LOG="$WORK/composer.log"; PHP_LOG="$WORK/php.log"
+    mkdir -p "$SRV/repo/src"
+    cat > "$WORK/fakebin/composer" <<'FAKE'
+#!/usr/bin/env bash
+# fake composer: records the call
+echo "$*" >> "$STACK_TEST_COMPOSER_LOG"
+FAKE
+    cat > "$WORK/fakebin/php" <<'FAKE'
+#!/usr/bin/env bash
+# fake php: records the call; -v prints a version line, -l says whether the file holds the text SYNTAX ERROR; any other call
+# (a check file run by php) exits with STACK_TEST_PHP_STATUS
+echo "$*" >> "$STACK_TEST_PHP_LOG"
+case "${1:-}" in
+    -v) echo "PHP 8.4.0 (cli) (fake)"; exit 0 ;;
+    -l)
+        if grep -q 'SYNTAX ERROR' "${2:-}" 2>/dev/null; then echo "PHP Parse error: syntax error in ${2:-} on line 1"; exit 255; fi
+        echo "No syntax errors detected in ${2:-}"; exit 0 ;;
+esac
+exit "${STACK_TEST_PHP_STATUS:-0}"
+FAKE
+    chmod +x "$WORK/fakebin/composer" "$WORK/fakebin/php"
+    remote_ci() { # remote_ci <php> <sync dir> <module> <check file> <check script>: sets RSTATUS; the output is in $WORK/rout, the fakes' logs in $COMPOSER_LOG and $PHP_LOG
+        : > "$COMPOSER_LOG"; : > "$PHP_LOG"
+        PATH="$WORK/fakebin:$PATH" STACK_SERVER_ROOT="$SRV" STACK_TEST_COMPOSER_LOG="$COMPOSER_LOG" STACK_TEST_PHP_LOG="$PHP_LOG" \
+            bash "$WORK/ci-remote.sh" "$@" > "$WORK/rout" 2>&1 < /dev/null
+        RSTATUS=$?
+    }
+    check() { # check <label> <command...>: passes when the command succeeds
+        local label="$1"; shift
+        if "$@"; then good "$label"; else bad "$label (status $RSTATUS): $(cat "$WORK/rout")"; fi
+    }
+    lint_lines() { grep -c '^-l ' "$PHP_LOG" | tr -d ' '; }
+    mk_plain() { # mk_plain <module>: a module without a composer.json, with PHP files in the places the lint must and must not reach
+        local d="$SRV/repo/src/$1"
+        rm -rf "$d"; mkdir -p "$d/src/Sub" "$d/vendor/pkg" "$d/node_modules/m" "$d/.git" "$d/tests"
+        echo '<?php' > "$d/$1.php"; echo '<?php' > "$d/src/A.php"; echo '<?php' > "$d/src/Sub/B.php"
+        echo '<?php' > "$d/vendor/pkg/V.php"; echo '<?php' > "$d/node_modules/m/N.php"; echo '<?php' > "$d/.git/H.php"
+        printf '%s\n' '#!/usr/bin/env bash' 'echo "ok from check"' ': > check.ran' > "$d/tests/check.sh"
+    }
+    PLAIN="$SRV/repo/src/plain_mod"
+
+    # a. a module with a composer.json: the Composer road, the three commands as they always were, no php -l
+    mkdir -p "$SRV/repo/src/comp_mod/src"
+    echo '{}' > "$SRV/repo/src/comp_mod/composer.json"; echo '<?php' > "$SRV/repo/src/comp_mod/comp_mod.php"; echo '<?php' > "$SRV/repo/src/comp_mod/src/A.php"
+    remote_ci "$DEFAULT_PHP" src comp_mod tests/check.sh check
+    check "server: a module with a composer.json succeeds" test "$RSTATUS" -eq 0
+    check "server: the Composer road runs exactly install, validate and run, in that order, with the options of always" \
+        test "$(cat "$COMPOSER_LOG")" = "$(printf '%s\n' 'install --no-interaction --prefer-dist --quiet' 'validate --strict --no-check-version' 'run --no-interaction check')"
+    check "server: the Composer road makes no php -l" test "$(lint_lines)" -eq 0
+
+    # b. a module without one: php -l on its own PHP files (not vendor/, node_modules/ or a dot-folder), then the check file
+    mk_plain plain_mod
+    remote_ci "$DEFAULT_PHP" src plain_mod tests/check.sh check
+    check "server: a module without a composer.json succeeds" test "$RSTATUS" -eq 0
+    check "server: the plain road does not call composer" test ! -s "$COMPOSER_LOG"
+    check "server: three -l calls, for plain_mod.php, src/A.php and src/Sub/B.php, none for vendor/, node_modules/ or .git/" \
+        sh -c "[ \"\$(grep -c '^-l ' '$PHP_LOG')\" -eq 3 ] && grep -qxF -- '-l ./plain_mod.php' '$PHP_LOG' && grep -qxF -- '-l ./src/A.php' '$PHP_LOG' && grep -qxF -- '-l ./src/Sub/B.php' '$PHP_LOG'"
+    check "server: the check file ran in the folder of the module" test -f "$PLAIN/check.ran"
+    check "server: the syntax check is reported before the output of the check file" \
+        sh -c "[ \"\$(grep -n '^syntax check: 3 PHP file(s), no error\$' '$WORK/rout' | head -n 1 | cut -d: -f1)\" -lt \"\$(grep -n '^ok from check\$' '$WORK/rout' | head -n 1 | cut -d: -f1)\" ]"
+
+    # c. the same module without a check file: only the syntax check, said so
+    rm -f "$PLAIN/tests/check.sh" "$PLAIN/check.ran"
+    remote_ci "$DEFAULT_PHP" src plain_mod tests/check.sh check
+    check "server: a module without a check file is syntax-checked only, and says so" sh -c "[ $RSTATUS -eq 0 ] && grep -q 'syntax check only' '$WORK/rout'"
+
+    # d. a check file in PHP runs with php (the match is exact: tests/check.php is also linted, as -l ./tests/check.php)
+    echo '<?php' > "$PLAIN/tests/check.php"
+    remote_ci "$DEFAULT_PHP" src plain_mod tests/check.php check
+    check "server: a .php check file is run with php" sh -c "[ $RSTATUS -eq 0 ] && grep -qxF 'tests/check.php' '$PHP_LOG'"
+
+    # e. a syntax error: the matrix fails, names the file, and the check file does not run
+    mk_plain plain_mod
+    echo '<?php // SYNTAX ERROR' > "$PLAIN/src/Bad.php"
+    remote_ci "$DEFAULT_PHP" src plain_mod tests/check.sh check
+    check "server: a syntax error fails the job, names the file, and the check file does not run" \
+        sh -c "[ $RSTATUS -ne 0 ] && grep -q 'src/Bad.php' '$WORK/rout' && [ ! -e '$PLAIN/check.ran' ]"
+
+    # f. a check file that fails: its status
+    mk_plain plain_mod
+    printf '%s\n' '#!/usr/bin/env bash' 'exit 1' > "$PLAIN/tests/check.sh"
+    remote_ci "$DEFAULT_PHP" src plain_mod tests/check.sh check
+    check "server: a check file that exits 1 makes the job exit 1" test "$RSTATUS" -eq 1
+
+    # g. a check file that is a symbolic link is never followed; neither is a folder on the way to it
+    mk_plain plain_mod
+    mkdir -p "$WORK/elsewhere"
+    printf '%s\n' '#!/usr/bin/env bash' ': > "$(dirname "$0")/ran"' > "$WORK/elsewhere/target.sh"
+    ln -s "$WORK/elsewhere/target.sh" "$PLAIN/tests/link.sh"
+    remote_ci "$DEFAULT_PHP" src plain_mod tests/link.sh check
+    check "server: a check file that is a symbolic link is refused, and its target did not run" \
+        sh -c "[ $RSTATUS -ne 0 ] && grep -q 'symbolic link' '$WORK/rout' && [ ! -e '$WORK/elsewhere/ran' ] && ! grep -qxF 'tests/link.sh' '$PHP_LOG'"
+    mkdir -p "$SRV/repo/src/linked_mod" "$WORK/elsewhere-dir"
+    echo '<?php' > "$SRV/repo/src/linked_mod/linked_mod.php"
+    printf '%s\n' '#!/usr/bin/env bash' ': > "$(dirname "$0")/ran"' > "$WORK/elsewhere-dir/check.sh"
+    ln -s "$WORK/elsewhere-dir" "$SRV/repo/src/linked_mod/tests"
+    remote_ci "$DEFAULT_PHP" src linked_mod tests/check.sh check
+    check "server: a tests/ folder that is a symbolic link is refused, and the check file in it did not run" \
+        sh -c "[ $RSTATUS -ne 0 ] && grep -q 'symbolic link' '$WORK/rout' && [ ! -e '$WORK/elsewhere-dir/ran' ] && ! grep -qxF 'tests/check.sh' '$PHP_LOG'"
+
+    # h. a module that is not on the server
+    remote_ci "$DEFAULT_PHP" src ghost_mod tests/check.sh check
+    check "server: a module that is not there is refused, with the advice to run sync.sh" sh -c "[ $RSTATUS -ne 0 ] && grep -q 'run sync.sh' '$WORK/rout'"
+
+    # i. hostile parameters are refused again on the server, before anything runs (not even php -v), and nothing is written
+    mk_plain plain_mod
+    before="$(find "$SRV" | wc -l | tr -d ' ')"
+    hostile_ci() { # hostile_ci <label> <php> <sync dir> <module> <check file> <check script>
+        local label="$1"; shift
+        remote_ci "$@"
+        check "server refuses $label, and nothing ran" sh -c "[ $RSTATUS -ne 0 ] && [ ! -s '$COMPOSER_LOG' ] && [ ! -s '$PHP_LOG' ]"
+    }
+    hostile_ci "a PHP version with a command"      '8.4;id' src plain_mod tests/check.sh check
+    hostile_ci "an absolute sync folder"           "$DEFAULT_PHP" /abs plain_mod tests/check.sh check
+    hostile_ci "a sync folder with .."             "$DEFAULT_PHP" src/../src plain_mod tests/check.sh check
+    hostile_ci "a module with a command"           "$DEFAULT_PHP" src 'plain_mod;touch pwned' tests/check.sh check
+    hostile_ci "a module with a path"              "$DEFAULT_PHP" src ../plain_mod tests/check.sh check
+    hostile_ci "a check file with .."              "$DEFAULT_PHP" src plain_mod ../x.sh check
+    hostile_ci "an absolute check file"            "$DEFAULT_PHP" src plain_mod /abs/x.sh check
+    hostile_ci "a check file with //"              "$DEFAULT_PHP" src plain_mod a//b.sh check
+    hostile_ci "a check file that is not .sh or .php" "$DEFAULT_PHP" src plain_mod x.txt check
+    hostile_ci "a check file with a space"         "$DEFAULT_PHP" src plain_mod 'a b.sh' check
+    hostile_ci "a check file with a command"       "$DEFAULT_PHP" src plain_mod '$(touch pwned).sh' check
+    hostile_ci "a check script with a command"     "$DEFAULT_PHP" src plain_mod tests/check.sh 'check;id'
+    check "hostile parameters wrote nothing" test "$(find "$SRV" | wc -l | tr -d ' ')" -eq "$before"
+    check "no stray file was created by an injected command" test -z "$(find "$SRV" -name pwned)" -a ! -e "$WORK/pwned" -a ! -e "$PWD/pwned"
+fi
 
 # ---- snapshot.sh -------------------------------------------------------------------------------------------------------------
 echo "--- snapshot.sh"
@@ -223,19 +434,6 @@ else
 fi
 
 # ---- examples/extra ------------------------------------------------------------------------------------------------------------------
-locked_job() { # locked_job: what locked.sh received in the last run, parsed back from the recorded ssh call: the number of words, then the command
-    local f
-    for f in "$CALLS".arg2.*; do
-        [ -f "$f" ] || continue
-        case "$(cat "$f")" in
-            "bash "*locked.sh*) bash -c 'eval "set -- ${1#bash }"; printf "%s\n" "$#"; printf "%s" "$2"' _ "$(cat "$f")"; return ;;
-        esac
-    done
-}
-job_words() { locked_job | sed -n 1p; }
-job_text() { locked_job | sed '1d'; }
-call_line() { grep -nF -- "$1" "$CALLS" | head -n 1 | cut -d: -f1; }
-
 echo "--- examples/extra/infection-diff.sh"
 if [ -f "$WORK/docker/extra/infection-diff.sh" ]; then
     INF=extra/infection-diff.sh
