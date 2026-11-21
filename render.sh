@@ -39,7 +39,7 @@ _root="$(cd "${_root:-$PWD}" && pwd -P)"
 _ALL_PARAMS="PROJECT_LABEL STACK_NAME DOCKER_NETWORK APP_HOST TOOLS_HOST APP_URL SSH_ALIAS REMOTE_ROOT TZ WEB_PHP_VERSION IMAGE_OWNER \
 WEB_IMAGE TOOLS_IMAGE TOOLS_PHP_VERSIONS TOOLS_NODE PASS_AUTHORIZATION TOOLS_CPUS TOOLS_MEM TOOLS_PIDS WEB_EXTRA_PHP_VERSION \
 WEB_EXTRA_NAME WEB_EXTRA_HOST DEST_DIR LOCAL_TMP_DIR SYNC_DIR LOCK_FILE SYNC_EXCLUDES MODULES_DIR APP_TARGETS DEPLOY_MODULES \
-DEPLOY_EXTRA DEPLOY_EXCLUDES DEV_MARKER CI_MODULES CI_CHECK_SCRIPT CI_STATIC_SCRIPT STATIC_TOOLS_DIR MATRIX_PHP_VERSIONS DEFAULT_PHP \
+DEPLOY_EXTRA DEPLOY_EXCLUDES DEV_MARKER CI_MODULES CI_CHECK_SCRIPT CI_CHECK_FILE CI_STATIC_SCRIPT STATIC_TOOLS_DIR MATRIX_PHP_VERSIONS DEFAULT_PHP \
 STATIC_PHP DEPLOY_PHP MAILPIT_URL MAILPIT_SMTP_HOST MAILPIT_SMTP_PORT INCLUDE_AI"
 # shellcheck disable=SC2086
 unset $_ALL_PARAMS
@@ -77,7 +77,7 @@ _tools_tag="$_first_php-$_last_php"
 : "${SYNC_EXCLUDES=.git vendor/ node_modules/ .DS_Store *.zip *.sha256 .composer/ .phpunit.cache/}"
 : "${MODULES_DIR=modules}" "${APP_TARGETS:=app}" "${DEPLOY_MODULES=}" "${DEPLOY_EXTRA=}"
 : "${DEPLOY_EXCLUDES=/tests/ /phpunit* /.php-cs-fixer* .DS_Store}"
-: "${DEV_MARKER=}" "${CI_MODULES=}" "${CI_CHECK_SCRIPT:=check}" "${CI_STATIC_SCRIPT=}" "${STATIC_TOOLS_DIR=}"
+: "${DEV_MARKER=}" "${CI_MODULES=}" "${CI_CHECK_SCRIPT:=check}" "${CI_CHECK_FILE:=tests/check.sh}" "${CI_STATIC_SCRIPT=}" "${STATIC_TOOLS_DIR=}"
 : "${MATRIX_PHP_VERSIONS:=8.3 8.4 8.5}" "${DEFAULT_PHP:=8.4}" "${STATIC_PHP:=$DEFAULT_PHP}" "${DEPLOY_PHP:=$DEFAULT_PHP}"
 : "${MAILPIT_URL=}" "${MAILPIT_SMTP_HOST=}" "${MAILPIT_SMTP_PORT=}" "${INCLUDE_AI:=1}"
 : "${PROJECT_LABEL:=}" "${STACK_NAME:=}" "${APP_HOST:=}" "${TOOLS_HOST:=}" "${SSH_ALIAS:=}" "${REMOTE_ROOT:=}"
@@ -131,6 +131,7 @@ _dir='^[A-Za-z0-9_][A-Za-z0-9._/-]*$'      # relative folder, no leading dot
 _tmpdir='^[A-Za-z0-9._][A-Za-z0-9._/-]*$'  # relative folder, a leading dot is fine (.tmp)
 _image='^[A-Za-z0-9][A-Za-z0-9._/:@-]*$'
 _script='^[A-Za-z0-9:_-]+$'
+_checkfile='^[A-Za-z0-9_][A-Za-z0-9._/-]*\.(sh|php)$'   # the check file of a module without composer.json: relative, .sh or .php
 _modname='^[a-z][a-z0-9_]{1,63}$'
 _cimodname='^[a-z0-9][a-z0-9_-]{0,63}$'
 _glob='^[A-Za-z0-9._*?/-]+$'
@@ -192,6 +193,9 @@ match DEV_MARKER '^[A-Za-z0-9._-]+$' opt
 case "$DEV_MARKER" in .|..|.stack-managed) err "DEV_MARKER=\"$DEV_MARKER\" is reserved" ;; esac
 words CI_MODULES "$_cimodname" "module name (^[a-z0-9][a-z0-9_-]{0,63}\$)"
 match CI_CHECK_SCRIPT "$_script"; match CI_STATIC_SCRIPT "$_script" opt
+# CI_CHECK_FILE: ci-local.sh and the server refuse any ".." in it, so a name like tests/a..b.sh must fall here, not at run time
+match CI_CHECK_FILE "$_checkfile"; no_dots CI_CHECK_FILE
+case "$CI_CHECK_FILE" in *..*) err "CI_CHECK_FILE=\"$CI_CHECK_FILE\" must not contain \"..\"" ;; esac
 match STATIC_TOOLS_DIR "$_dir" opt; no_dots STATIC_TOOLS_DIR
 php_versions MATRIX_PHP_VERSIONS
 for _v in $MATRIX_PHP_VERSIONS; do
@@ -241,7 +245,7 @@ if [ "$_check" -eq 1 ]; then
     echo "  server folder: $REMOTE_ROOT; PHP in tools: $TOOLS_PHP_VERSIONS; matrix: $MATRIX_PHP_VERSIONS; default: $DEFAULT_PHP"
     echo "  project folder: $_dest (project root as seen by the scripts: $PROJECT_ROOT_REL)"
     echo "  synced: $SYNC_DIR -> /repo/$SYNC_DIR; modules in /<target>/${MODULES_DIR:-.}; targets: $APP_TARGETS"
-    echo "  deploy: ${DEPLOY_MODULES:-every module found}${_extra_names:+; extra: $_extra_names}; matrix: ${CI_MODULES:-every module found}"
+    echo "  deploy: ${DEPLOY_MODULES:-every module found}${_extra_names:+; extra: $_extra_names}; matrix: ${CI_MODULES:-every module found}; check file (no composer.json): $CI_CHECK_FILE"
     exit 0
 fi
 

@@ -174,7 +174,7 @@ All are in `params.example.env` with comments; `render.sh --check` explains ever
 | Identity and network | `PROJECT_LABEL`, `STACK_NAME`, `DOCKER_NETWORK`, `APP_HOST`, `TOOLS_HOST`, `APP_URL`, `SSH_ALIAS` |
 | Server and images | `REMOTE_ROOT`, `TZ`, `WEB_PHP_VERSION`, `IMAGE_OWNER` (optional prefix: the images are `[<owner>/]perfex-web:<PHP version>` and `[<owner>/]perfex-tools:<first>-<last PHP version>`), `WEB_IMAGE` and `TOOLS_IMAGE` (only to override those names), `TOOLS_PHP_VERSIONS`, `TOOLS_NODE`, `PASS_AUTHORIZATION`, `TOOLS_CPUS`, `TOOLS_MEM`, `TOOLS_PIDS`, `WEB_EXTRA_*` |
 | Where things go | `DEST_DIR` (the generated folder), `LOCAL_TMP_DIR`, `SYNC_DIR` (the code mirrored to the server), `LOCK_FILE`, `SYNC_EXCLUDES` |
-| Modules and CI | `MODULES_DIR`, `APP_TARGETS`, `DEPLOY_MODULES`, `DEPLOY_EXTRA` (modules that live deeper than `<SYNC_DIR>/<name>/`, as `<folder>:<name>` pairs), `DEPLOY_EXCLUDES`, `DEV_MARKER`, `CI_MODULES`, `CI_CHECK_SCRIPT`, `CI_STATIC_SCRIPT`, `STATIC_TOOLS_DIR` |
+| Modules and CI | `MODULES_DIR`, `APP_TARGETS`, `DEPLOY_MODULES`, `DEPLOY_EXTRA` (modules that live deeper than `<SYNC_DIR>/<name>/`, as `<folder>:<name>` pairs), `DEPLOY_EXCLUDES`, `DEV_MARKER`, `CI_MODULES`, `CI_CHECK_SCRIPT`, `CI_CHECK_FILE` (the check file of a module without `composer.json`, default `tests/check.sh`), `CI_STATIC_SCRIPT`, `STATIC_TOOLS_DIR` |
 | PHP versions | `MATRIX_PHP_VERSIONS` (default `8.3 8.4 8.5`), `DEFAULT_PHP` (8.4), `STATIC_PHP`, `DEPLOY_PHP` |
 | Services and agents | `MAILPIT_URL`, `MAILPIT_SMTP_HOST`, `MAILPIT_SMTP_PORT`, `INCLUDE_AI` |
 

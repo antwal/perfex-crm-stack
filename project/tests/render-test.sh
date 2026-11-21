@@ -126,6 +126,16 @@ DEPLOY_EXTRA|DEPLOY_EXTRA=":mod"
 DEPLOY_EXTRA|DEPLOY_EXTRA="a/b:"
 DEPLOY_EXTRA|DEPLOY_EXTRA=".hidden/x:mod"
 DEPLOY_EXTRA|DEPLOY_EXTRA="a/b:m"
+CI_CHECK_FILE|CI_CHECK_FILE="../check.sh"
+CI_CHECK_FILE|CI_CHECK_FILE="/abs/check.sh"
+CI_CHECK_FILE|CI_CHECK_FILE="tests//check.sh"
+CI_CHECK_FILE|CI_CHECK_FILE="tests/a..b.sh"
+CI_CHECK_FILE|CI_CHECK_FILE="tests/check.txt"
+CI_CHECK_FILE|CI_CHECK_FILE="tests/check sh.sh"
+CI_CHECK_FILE|CI_CHECK_FILE='tests/$(id).sh'
+CI_CHECK_FILE|CI_CHECK_FILE=".hidden/check.sh"
+CI_CHECK_FILE|CI_CHECK_FILE="check"
+CI_CHECK_FILE|CI_CHECK_FILE="tests/check.sh/"
 CASES
 
 # ---- 3. nothing in the environment can stand in for a missing parameter -----------------------------------------------------------
@@ -242,6 +252,21 @@ bash "$RENDER" --check "$WORK/p/good.env" > "$WORK/out" 2>&1; st=$?
 if [ "$st" -eq 0 ] && grep -q 'deploy: sample_module; matrix' "$WORK/out" && ! grep -q 'extra:' "$WORK/out"; then good "--check says nothing of extras when there are none"; else bad "--check printed an extra line with an empty DEPLOY_EXTRA: $(cat "$WORK/out")"; fi
 render_conf noextra
 if [ "$STATUS" -eq 0 ] && conf_has 'DEPLOY_EXTRA=""'; then good "an empty DEPLOY_EXTRA gives DEPLOY_EXTRA=\"\" in stack.conf"; else bad "DEPLOY_EXTRA is missing from stack.conf (status $STATUS)"; fi
+
+# CI_CHECK_FILE, the check file of a module without composer.json: the example's value ends in stack.conf, a good value is kept and
+# listed by --check, and a missing or empty one takes the default (a parameter file of an older template has no such line)
+if [ "$STATUS" -eq 0 ] && conf_has 'CI_CHECK_FILE="tests/check.sh"'; then good "the render of the example puts CI_CHECK_FILE=\"tests/check.sh\" in stack.conf"; else bad "CI_CHECK_FILE is missing from the stack.conf of the example (status $STATUS)"; fi
+render_conf checkfile 'CI_CHECK_FILE="ci/run.php"'
+if [ "$STATUS" -eq 0 ] && conf_has 'CI_CHECK_FILE="ci/run.php"'; then good "CI_CHECK_FILE=\"ci/run.php\" ends in stack.conf"; else bad "a good CI_CHECK_FILE was refused or not recorded (status $STATUS): $(cat "$WORK/out")"; fi
+bash "$RENDER" --check "$WORK/p/checkfile.env" > "$WORK/out" 2>&1; st=$?
+if [ "$st" -eq 0 ] && grep -qF 'check file (no composer.json): ci/run.php' "$WORK/out"; then good "--check prints the check file of the matrix"; else bad "--check does not print the check file (status $st): $(cat "$WORK/out")"; fi
+grep -v '^CI_CHECK_FILE=' "$BASE" > "$WORK/p/nocheckfile.env"
+rm -rf "$WORK/r-nocheckfile"; mkdir -p "$WORK/r-nocheckfile"
+bash "$RENDER" "$WORK/p/nocheckfile.env" "$WORK/r-nocheckfile" > "$WORK/out" 2>&1; STATUS=$?
+CONF="$WORK/r-nocheckfile/$DEST_OF_EXAMPLE/stack.conf"
+if [ "$STATUS" -eq 0 ] && conf_has 'CI_CHECK_FILE="tests/check.sh"'; then good "a parameter file without CI_CHECK_FILE renders and takes the default tests/check.sh"; else bad "a missing CI_CHECK_FILE was not defaulted (status $STATUS): $(cat "$WORK/out")"; fi
+render_conf emptycheckfile 'CI_CHECK_FILE=""'
+if [ "$STATUS" -eq 0 ] && conf_has 'CI_CHECK_FILE="tests/check.sh"'; then good "an empty CI_CHECK_FILE takes the default tests/check.sh"; else bad "an empty CI_CHECK_FILE was not defaulted (status $STATUS): $(cat "$WORK/out")"; fi
 
 # the template folder, seen from the project root, goes into stack.conf: a plain relative path, ".." at the start allowed
 copytpl() { # copytpl <destination>: the files render.sh needs, in another folder
