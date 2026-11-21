@@ -181,16 +181,16 @@ Every command below is relative to the project root: `cd "{{PROJECT_ROOT_ABS}}"`
 | Command | What it does |
 |---|---|
 | `{{DEST_REL}}/sync.sh` | mirrors `{{SYNC_DIR}}/` to `/repo/{{SYNC_DIR}}` on the server (without `vendor/`, `.git`, zips), and puts `locked.sh` in place |
-| `{{DEST_REL}}/deploy.sh [--adopt] <module> [<target>]` | sync, then on the server: `composer install --no-dev`, copy of the module into `/<target>/{{MODULES_DIR}}/<module>`, development dependencies back in the repository copy. Modules: `{{DEPLOY_MODULES}}` (empty = every `<name>/<name>.php` found); also the names of `DEPLOY_EXTRA` in `stack.conf` (modules that live deeper than `{{SYNC_DIR}}/<name>/`, see below); targets: `{{APP_TARGETS}}` |
-| `{{DEST_REL}}/ci-local.sh [<module> ...]` | the PHP matrix `{{MATRIX_PHP_VERSIONS}}`: `composer install`, `validate --strict`, `run {{CI_CHECK_SCRIPT}}`; then the static analysis script, if there is one, on PHP {{STATIC_PHP}} |
-| `{{DEST_REL}}/run.sh '<command>'` | one command on the server, inside the lock, as `www-data` (it puts `locked.sh` there first if it is missing). Integration tests: `run.sh 'cd /repo/{{SYNC_DIR}}/<module> && PATH=/opt/php/{{DEPLOY_PHP}}:$PATH composer test:int'` |
+| `{{DEST_REL}}/deploy.sh [--adopt] <module> [<target>]` | sync, then on the server: `composer install --no-dev` (when the module has a `composer.json`), copy of the module into `/<target>/{{MODULES_DIR}}/<module>`, development dependencies back in the repository copy (the same). Modules: `{{DEPLOY_MODULES}}` (empty = every `<name>/<name>.php` found); also the names of `DEPLOY_EXTRA` in `stack.conf` (modules that live deeper than `{{SYNC_DIR}}/<name>/`, see below); targets: `{{APP_TARGETS}}` |
+| `{{DEST_REL}}/ci-local.sh [<module> ...]` | the PHP matrix `{{MATRIX_PHP_VERSIONS}}`, one job per module and version, the road chosen on the server by the module's folder: with a `composer.json`, `composer install`, `validate --strict`, `run {{CI_CHECK_SCRIPT}}`; without one, `php -l` on every PHP file of the module and then `{{CI_CHECK_FILE}}` if the module has it. Then the static analysis script (Composer modules only), if there is one, on PHP {{STATIC_PHP}} |
+| `{{DEST_REL}}/run.sh '<command>'` | one command on the server, inside the lock, as `www-data` (it puts `locked.sh` there first if it is missing). Integration tests: `run.sh 'cd /repo/{{SYNC_DIR}}/<module> && PATH=/opt/php/{{DEPLOY_PHP}}:$PATH composer test:int'`, or, for a module without Composer, `… php tests/integration.php` |
 | `{{DEST_REL}}/snapshot.sh [<label>]` | a dump of the database and an archive of `/app`, kept on the server in `/repo/.tmp/snapshots/<name>/` |
 | `{{DEST_REL}}/reset.sh <name>` / `--list` | puts a snapshot back after you type its name; `--list` shows the snapshots |
 | `{{DEST_REL}}/doctor.sh` / `--guide` | the checks / the setup steps with your values |
 | `{{DEST_REL}}/install-perfex.sh <folder or zip>` | copies your Perfex CRM into `/app` (step 7) |
 | `bash {{DEST_REL}}/tests/deploy-test.sh` | deploy.sh against a fake ssh and rsync, and its server script against a folder tree: nothing touches a server |
 | `bash {{DEST_REL}}/tests/locked-test.sh` | run.sh and locked.sh without a server |
-| `bash {{DEST_REL}}/tests/scripts-test.sh` | ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh, doctor.sh, the copy of locked.sh by run.sh and the example scripts of the template's `examples/extra/`, against a fake ssh, rsync, curl, git and npx |
+| `bash {{DEST_REL}}/tests/scripts-test.sh` | ci-local.sh (and its server script against a folder tree, with the example module `plain_module/` too), snapshot.sh, reset.sh, install-perfex.sh, doctor.sh, the copy of locked.sh by run.sh and the example scripts of the template's `examples/extra/`, against a fake ssh, rsync, curl, git, npx, composer and php |
 | `bash {{DEST_REL}}/tests/render-test.sh` | `render.sh`, with good and bad parameters (it finds the template through `TEMPLATE_REL`, or `STACK_TEMPLATE_DIR`) |
 | `{{DEST_REL}}/extra/` | your own scripts; `render.sh --force` rewrites only its `README.md` (see "Writing your own script" below) |
 
@@ -206,8 +206,8 @@ curl -s {{MAILPIT_URL}}/api/v1/messages | jq '.messages[0].Subject'
 in `MYSQL_PWD`, not in a `-p…` option, because an environment variable does not show up in `ps`, while a command-line argument
 does, to every process in the container. `mariadb` is the client the tools image ships, the same one `snapshot.sh` uses.)
 
-PHP versions are chosen with `PATH=/opt/php/<version>:$PATH`: a shim that makes `php` that version, for Composer scripts and
-`vendor/bin/*` too. The release package of a module does **not** go through `deploy.sh`: your build produces it and you
+PHP versions are chosen with `PATH=/opt/php/<version>:$PATH`: a shim that makes `php` that version, for Composer scripts,
+`vendor/bin/*` and the check file of a module without Composer too. The release package of a module does **not** go through `deploy.sh`: your build produces it and you
 install it from the application's interface, as a customer would.
 
 A heavy job at a time: `deploy.sh`, `ci-local.sh`, `run.sh`, `snapshot.sh` and `reset.sh` wait for each other at the lock
@@ -216,10 +216,20 @@ A heavy job at a time: `deploy.sh`, `ci-local.sh`, `run.sh`, `snapshot.sh` and `
 ### What a module needs to be deployed
 
 A folder `<name>/<name>.php` under `{{SYNC_DIR}}/`, with `<name>` made of lowercase letters, digits and `_`, starting with a letter
-(2 to 64 characters). That is also what a Perfex module is. If it has a `composer.json`, the matrix runs its `{{CI_CHECK_SCRIPT}}` script on every
-PHP version. The example module of the template (`examples/module/sample_module/`) shows the shape, including a
-`test:int` script and `tests/Integration/TestInstance.php`, a helper that reads the stack variables
-(`PERFEX_URL`, `PERFEX_APP_PATH`, `PERFEX_DB_*`, `MAILPIT_*`) that the SSH session provides.
+(2 to 64 characters). That is also what a Perfex module is. A module has one of two forms, and `ci-local.sh` and `deploy.sh` tell
+them apart on the server by the presence of a `composer.json` in its folder:
+
+- **with a `composer.json`**: the matrix runs its `{{CI_CHECK_SCRIPT}}` script on every PHP version, and `deploy.sh` installs its
+  dependencies. The example `examples/module/sample_module/` of the template shows the shape, including a `test:int` script and
+  `tests/Integration/TestInstance.php`, a helper that reads the stack variables (`PERFEX_URL`, `PERFEX_APP_PATH`,
+  `PERFEX_DB_*`, `MAILPIT_*`) that the SSH session provides;
+- **without one**: the matrix runs `php -l` on every PHP file of the module (`vendor/`, `node_modules/` and the dot-folders
+  are left out) and then the check file `{{CI_CHECK_FILE}}` (`CI_CHECK_FILE` in your parameters; `.sh` runs with bash, `.php`
+  with php), if the module has it; `deploy.sh` copies the folder as it is. The example `examples/module/plain_module/` shows the shape:
+  the same module and the same checks, with `require_once`, `tests/check.sh` and `php tests/integration.php`.
+
+A module with both takes the Composer road, and its check file is not run. The check file lives under `tests/`, which
+`DEPLOY_EXCLUDES` keeps out of the application; a check file elsewhere must be added to the excludes.
 
 A module that lives **inside another folder** of `{{SYNC_DIR}}/` (a sample module in `<module>/examples/<sample>/`, say) is
 listed in the parameter `DEPLOY_EXTRA` as `<folder relative to {{SYNC_DIR}}>:<name>`, for example

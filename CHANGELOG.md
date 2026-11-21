@@ -4,6 +4,38 @@ The changes of each version of the template, in the format of [Keep a Changelog]
 numbered MAJOR.MINOR.PATCH. The functions of `project/lib.sh` listed in "Writing your own script" (the generated README) are the API
 of the scripts you write yourself: they keep their names and arguments until the next major version.
 
+## [Unreleased]
+
+### Added
+
+- `CI_CHECK_FILE`, a parameter for the matrix of a module **without** a `composer.json`: the file `ci-local.sh` runs after `php -l`,
+  relative to the module, `.sh` (run with bash) or `.php` (run with php); default `tests/check.sh`, which `DEPLOY_EXCLUDES` keeps out
+  of the application. `render.sh` validates it (an extension of `.sh` or `.php`, no `..`, no `//`, no leading `/` or `.`), writes it
+  in `stack.conf` and prints it with `--check`; a parameter file or a `stack.conf` written by an older template, without the line,
+  gets the default.
+- The matrix now runs a module without a `composer.json`: `php -l` on every PHP file of the module (`vendor/`, `node_modules/` and
+  the folders that start with a dot are left out), then the check file if the module has it, otherwise only the syntax check. A
+  module with both a `composer.json` and a check file takes the Composer road, and the file is not run.
+- `examples/module/plain_module/`, the twin of `sample_module` without Composer: classes loaded with `require_once`, a unit runner
+  (`tests/unit.php`) and an integration script (`tests/integration.php`) in plain PHP, a `tests/check.sh`, and a README.
+- Tests. `scripts-test.sh` runs the very script that `ci-local.sh` sends to the server against a folder tree, with a fake `composer`
+  and a fake `php`: both roads, a syntax error, a check file that fails, a check file or a `tests/` folder that is a symbolic link,
+  a module that is not on the server, hostile parameters; it also runs `plain_module` with the real `php` of the machine, when there
+  is one. `deploy-test.sh` deploys a module without a `composer.json`, with and without a `vendor/` of its own; `render-test.sh`
+  checks `CI_CHECK_FILE`.
+
+### Changed
+
+- The job of the matrix reaches the server as a fixed script on the standard input, with the values as positional parameters
+  (quoted with `%q` and checked again on the server), as `deploy.sh` already did, and the road is chosen there, by the module's
+  folder: the `ssh` probe for a `composer.json` is gone, and a module without one is no longer skipped. For a module with a
+  `composer.json` the three Composer commands, their options and their order are the same; `composer run` has `< /dev/null`
+  after it, so a script of the module that reads the standard input cannot take the rest of the job.
+- The static analysis is skipped, on the server, for a module without a `composer.json`.
+- The README of the template and the one of the project folder, `run.sh` and `ai/AGENTS-section.md` describe both forms of a
+  module; the lessons of README §8 say that a module without Composer that keeps third-party code in a `vendor/` folder needs
+  `vendor/` removed from `SYNC_EXCLUDES`.
+
 ## [0.3.1]
 
 ### Changed

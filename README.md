@@ -69,7 +69,7 @@ perfex-crm-stack/
 │   ├── lib.sh             shared helpers and validators, sourced by the other scripts (and by yours in extra/)
 │   ├── sync.sh            mirrors your code folder to /repo/<SYNC_DIR> on the server, and puts locked.sh there
 │   ├── deploy.sh          sync, then copies a module into the application in development mode (.stack-managed marker, --adopt)
-│   ├── ci-local.sh        the PHP matrix on the server: composer install, validate --strict, your check script, per version
+│   ├── ci-local.sh        the PHP matrix on the server, per version: composer install, validate --strict and your check script, or php -l and your check file for a module without composer.json
 │   ├── run.sh             one command on the server, inside the lock
 │   ├── doctor.sh          checks the stack from your machine; --guide prints the setup steps with your values
 │   ├── snapshot.sh        a dump of the database and an archive of /app, kept on the server
@@ -82,9 +82,10 @@ perfex-crm-stack/
 │       ├── locked-test.sh           run.sh and locked.sh
 │       ├── scripts-test.sh          ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh, doctor.sh and the scripts of examples/extra/ (fake git and npx too)
 │       └── render-test.sh           render.sh with good and bad parameters (it finds the template through TEMPLATE_REL, or STACK_TEMPLATE_DIR)
-├── examples/              neutral examples: a parameter file, a module, three scripts for extra/
+├── examples/              neutral examples: a parameter file, two modules, three scripts for extra/
 │   ├── params/example.env       a filled-in parameter file with neutral values
 │   ├── module/sample_module/    the smallest module that goes through all of it, with unit and integration tests
+│   ├── module/plain_module/     the same module without Composer: require_once, php -l and tests/check.sh in the matrix, php tests/integration.php on the server
 │   └── extra/                   scripts to copy into the generated extra/ folder (tested by scripts-test.sh)
 │       ├── infection-diff.sh    Infection on the changed files of a module, on the server, inside the lock
 │       ├── bench.sh             response times of one URL from your machine, with percentiles
@@ -232,7 +233,7 @@ From the project root; every command has the values of your project (`tools/dock
 |---|---|
 | `tools/docker/sync.sh` | mirror your code folder to `/repo/<SYNC_DIR>` on the server, and put `locked.sh` there |
 | `tools/docker/deploy.sh [--adopt] <module> [<target>]` | sync, then copy a module into `/app/modules/<module>`: refuses a folder that does not hold the `.stack-managed` marker unless `--adopt` |
-| `tools/docker/ci-local.sh [<module> ...]` | the PHP matrix: install, validate, your `check` script, on every version |
+| `tools/docker/ci-local.sh [<module> ...]` | the PHP matrix, on every version: install, validate and your `check` script, or, for a module without `composer.json`, `php -l` and your check file |
 | `tools/docker/run.sh '<command>'` | one command on the server, inside the lock |
 | `tools/docker/snapshot.sh`, `reset.sh <name>` | database dump + archive of `/app`; put it back after you type its name |
 | `tools/docker/doctor.sh [--guide]` | check the stack from your machine; print the setup steps with your values |
@@ -245,11 +246,16 @@ zip) put it there themselves when it is missing, so it always evolves with the t
 each other with `flock` and run at low priority in a process group that is terminated when the job ends: a test server left
 running in the background does not hold the lock.
 
-**Your own tests.** `ci-local.sh` runs, per module and PHP version, `composer install`, `composer validate --strict` and
-`composer run <CI_CHECK_SCRIPT>`: what `check` does is decided by the module's `composer.json`. Integration tests run in the
-tools container, with `PERFEX_URL`, `PERFEX_APP_PATH`, `PERFEX_DB_*`, `MAILPIT_URL` and `MAILPIT_SMTP_*` in the environment:
-`examples/module/sample_module/` shows the shape, with a `TestInstance.php` helper. A browser-test suite (Playwright and
-the like) connects the same way: ssh to the alias for anything that must run on the server, `http` to `APP_URL` for the rest.
+**Your own tests.** A module has one of two forms, and `ci-local.sh` tells them apart on the server, by a `composer.json` in
+the module's folder. With one, it runs, per module and PHP version, `composer install`, `composer validate --strict` and
+`composer run <CI_CHECK_SCRIPT>`: what `check` does is decided by the module's `composer.json`. Without one, it runs `php -l`
+on every PHP file of the module and then the file `CI_CHECK_FILE` (default `tests/check.sh`, `.sh` with bash, `.php` with
+php) if the module has it: put your tests there, with the tool you like. A module with both takes the Composer road. Integration
+tests run in the tools container, with `PERFEX_URL`, `PERFEX_APP_PATH`, `PERFEX_DB_*`, `MAILPIT_URL` and `MAILPIT_SMTP_*` in the
+environment (`composer test:int`, or `php tests/integration.php` without Composer): `examples/module/sample_module/` shows the
+shape, with a `TestInstance.php` helper, and `examples/module/plain_module/` shows it without Composer. A browser-test suite
+(Playwright and the like) connects the same way: ssh to the alias for anything that must run on the server, `http` to `APP_URL`
+for the rest.
 
 **Your own scripts.** The generated folder has an `extra/` folder for them: `render.sh --force` rewrites only its `README.md`
 and never touches what you add. A script starts by loading `stack.conf` and `lib.sh` and then has the alias, the project
@@ -284,6 +290,8 @@ smallest complete script. `examples/extra/` has three to copy: Infection on the 
   module folder that has one. `deploy.sh` never copies dot folders, and its marker is what tells it which folders it may own.
 - If the Sury repository does not have a PHP version yet, build the tools image with a shorter `PHP_VERSIONS`.
 - Composer stops a script after 300 seconds: `"process-timeout": 0` in the `composer.json` of a module with a long suite.
+- A module without Composer that keeps third-party code in a folder named `vendor/` needs `vendor/` removed from `SYNC_EXCLUDES`,
+  or `sync.sh` leaves that folder on your machine and the server never sees it.
 - A credential pasted in chat or visible in a screenshot is compromised: rotate it.
 
 ## 9. Security

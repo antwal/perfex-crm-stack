@@ -35,7 +35,7 @@ Commands, from the project root:
 {{DEST_REL}}/deploy.sh [--adopt] <module> [<target>] # sync + development deploy (modules: {{DEPLOY_MODULES}}; targets: {{APP_TARGETS}})
 {{DEST_REL}}/ci-local.sh [<module> ...]              # the PHP matrix {{MATRIX_PHP_VERSIONS}}
 {{DEST_REL}}/run.sh '<command>'                      # one command on the server, inside the lock
-{{DEST_REL}}/run.sh 'cd /repo/{{SYNC_DIR}}/<module> && PATH=/opt/php/{{DEPLOY_PHP}}:$PATH composer test:int'   # integration tests against the instance
+{{DEST_REL}}/run.sh 'cd /repo/{{SYNC_DIR}}/<module> && PATH=/opt/php/{{DEPLOY_PHP}}:$PATH composer test:int'   # integration tests against the instance (a module without Composer: php tests/integration.php, or its own command)
 {{DEST_REL}}/snapshot.sh [<label>]                   # database dump + archive of /app, kept on the server
 {{DEST_REL}}/doctor.sh                               # checks of the whole stack
 bash {{DEST_REL}}/tests/deploy-test.sh               # deploy.sh against a fake ssh and rsync: no server is touched
