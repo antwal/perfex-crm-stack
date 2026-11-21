@@ -16,7 +16,8 @@
 #       3. rsync of the module into the application (the excludes of DEPLOY_EXCLUDES, no dot-folders, --delete-excluded);
 #       4. removes dot-folders that are still there (the application's uninstall does not delete them and cannot remove
 #          the module folder after them), writes vendor/.htaccess (denied for the web), creates DEV_MARKER if set;
-#       5. composer install again, with the development dependencies, in the module's folder, so test:int runs at once.
+#       5. composer install again, with the development dependencies, in the module's folder, so test:int runs at once, when it
+#          has a composer.json.
 # The release package of a module does not go through this script: you install it from the application's own interface,
 # as a customer would.
 # Values come from stack.conf, not from this file.

@@ -330,5 +330,21 @@ done
 check "hostile source folders wrote nothing" test "$(find "$SRV" | wc -l | tr -d ' ')" -eq "$before"
 check "no stray file was created by an injected source folder" test ! -e "$WORK/server/pwned" -a ! -e "$PWD/pwned" -a ! -e "$SRV/repo/src/pwned"
 
+# j. a module without a composer.json (version 0.4.0): deployed as it is, composer is not called, and there is no vendor/ of its own
+make_source plain_mod; rm -f "$SRV/repo/src/plain_mod/composer.json"
+mkdir -p "$SRV/repo/src/plain_mod/vendor/lib"; echo '<?php // third-party code kept by hand' > "$SRV/repo/src/plain_mod/vendor/lib/Lib.php"
+remote plain_mod app 0
+check "no composer.json: the deploy succeeds ($(tail -n 1 "$WORK/rout"))"          test "$RSTATUS" -eq 0
+check "no composer.json: composer is not called at all"                           test ! -s "$COMPOSER_LOG"
+check "no composer.json: the files are copied and the marker is written"          test -f "$M/plain_mod/plain_mod.php" -a -f "$M/plain_mod/src/Thing.php" -a -f "$M/plain_mod/.stack-managed"
+check "no composer.json: tests/ and the dot-folders are left out, as for any module" test ! -e "$M/plain_mod/tests" -a ! -e "$M/plain_mod/.git" -a ! -e "$M/plain_mod/.hidden"
+check "no composer.json: a vendor/ kept by hand is copied as it is"               cmp -s "$SRV/repo/src/plain_mod/vendor/lib/Lib.php" "$M/plain_mod/vendor/lib/Lib.php"
+check "no composer.json: that vendor/ is denied to the web"                       grep -q '^Require all denied$' "$M/plain_mod/vendor/.htaccess"
+make_source bare_mod; rm -f "$SRV/repo/src/bare_mod/composer.json"
+remote bare_mod app 0
+check "no composer.json and no vendor/: the deploy succeeds ($(tail -n 1 "$WORK/rout"))" test "$RSTATUS" -eq 0
+check "no composer.json and no vendor/: composer is not called at all"            test ! -s "$COMPOSER_LOG"
+check "no composer.json and no vendor/: the module is there, with no vendor/ and no vendor/.htaccess" test -f "$M/bare_mod/bare_mod.php" -a ! -e "$M/bare_mod/vendor" -a ! -e "$M/bare_mod/vendor/.htaccess"
+
 [ "$fail" -eq 0 ] && echo "=== deploy-test: all ok ===" || echo "=== deploy-test: FAILED ==="
 exit "$fail"
