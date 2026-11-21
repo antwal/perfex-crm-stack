@@ -4,7 +4,7 @@ The changes of each version of the template, in the format of [Keep a Changelog]
 numbered MAJOR.MINOR.PATCH. The functions of `project/lib.sh` listed in "Writing your own script" (the generated README) are the API
 of the scripts you write yourself: they keep their names and arguments until the next major version.
 
-## [Unreleased]
+## [0.4.0]
 
 ### Added
 
