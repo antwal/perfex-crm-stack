@@ -339,6 +339,37 @@ FAKE
     check "no stray file was created by an injected command" test -z "$(find "$SRV" -name pwned)" -a ! -e "$WORK/pwned" -a ! -e "$PWD/pwned"
 fi
 
+# ---- examples/module/plain_module: the example module without Composer, through the same script of the server ------------------------
+echo "--- examples/module/plain_module"
+if [ ! -s "$WORK/ci-remote.sh" ]; then
+    bad "no server script was captured from ci-local.sh: plain_module cannot be run"
+elif [ -d "$TEMPLATE_DIR/examples/module/plain_module" ]; then
+    rm -rf "$SRV/repo/src/plain_module"
+    cp -R "$TEMPLATE_DIR/examples/module/plain_module" "$SRV/repo/src/plain_module"
+    remote_ci "$DEFAULT_PHP" src plain_module tests/check.sh check
+    check "plain_module: the job of the matrix succeeds, with the fake php" test "$RSTATUS" -eq 0
+    check "plain_module: composer is not called" test ! -s "$COMPOSER_LOG"
+    check "plain_module: php -l on its five PHP files" \
+        sh -c "[ \"\$(grep -c '^-l ' '$PHP_LOG')\" -eq 5 ] && grep -qxF -- '-l ./plain_module.php' '$PHP_LOG' && grep -qxF -- '-l ./src/Greeting.php' '$PHP_LOG' && grep -qxF -- '-l ./tests/unit.php' '$PHP_LOG' && grep -qxF -- '-l ./tests/TestInstance.php' '$PHP_LOG' && grep -qxF -- '-l ./tests/integration.php' '$PHP_LOG'"
+    check "plain_module: tests/check.sh ran, and it called php tests/unit.php (a line without -l)" grep -qxF 'tests/unit.php' "$PHP_LOG"
+    if command -v php > /dev/null 2>&1; then
+        # the real PHP of this machine, no fake in the PATH, and no Composer needed: the road is php -l and tests/check.sh
+        PATH="$PATH" STACK_SERVER_ROOT="$SRV" bash "$WORK/ci-remote.sh" "$DEFAULT_PHP" src plain_module tests/check.sh check > "$WORK/rout" 2>&1 < /dev/null
+        RSTATUS=$?
+        check "plain_module: with the real php of this machine the job succeeds and its unit tests pass" \
+            sh -c "[ $RSTATUS -eq 0 ] && grep -qF 'plain_module unit tests: 3 passed, 0 failed' '$WORK/rout' && grep -qF 'syntax check: 5 PHP file(s), no error' '$WORK/rout'"
+        # outside the tools container the integration script skips itself and exits 0, whatever the variables of this machine say
+        PERFEX_URL="" PERFEX_APP_PATH="" PERFEX_DB_HOST="" PERFEX_DB_NAME="" PERFEX_DB_USER="" PERFEX_DB_PASSWORD="" php "$SRV/repo/src/plain_module/tests/integration.php" > "$WORK/rout" 2>&1 < /dev/null
+        RSTATUS=$?
+        check "plain_module: tests/integration.php skips itself and exits 0 when the variables of the stack are not set" \
+            sh -c "[ $RSTATUS -eq 0 ] && grep -q '^skipped: not in the tools container' '$WORK/rout'"
+    else
+        echo "skipped: no php on this machine (the real run of plain_module and of its integration script)"
+    fi
+else
+    echo "skipped: no examples/module/plain_module/ in the template (STACK_TEMPLATE_DIR, or TEMPLATE_REL of stack.conf)"
+fi
+
 # ---- snapshot.sh -------------------------------------------------------------------------------------------------------------
 echo "--- snapshot.sh"
 refused "a label with a space"       snapshot.sh 'Bad Label'

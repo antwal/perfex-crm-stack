@@ -30,3 +30,5 @@ What it teaches, for your own modules:
   `"process-timeout": 0` as here, because Composer stops a script after 300 seconds.
 - Integration tests run in the tools container, where PHP, the database and the instance's URL are one hop away. They read
   everything from the environment and never contain a credential.
+
+The same module without Composer is [`../plain_module/`](../plain_module/).
