@@ -138,7 +138,8 @@ services:
   carries the host address, edit that one variable back. (The host address also works from the container if the host's
   firewall lets the container reach its own address; `doctor.sh` tells you when it does not.)
 - Perfex keeps its address in `APP_BASE_URL` (`app-config.php`, written by the installation wizard): run the wizard through the
-  address you will use.
+  address you will use, or make it follow the request with `base-url.sh dynamic` of the generated folder (a test instance behind
+  a tunnel or an HTTPS proxy).
 - `ports:` listens on every interface of the host. Bind to a private address (`"10.0.0.5:8080:80"`) or close the two ports
   in the host's firewall to whoever should not have them; sshd accepts keys only, but the application is open to anyone who
   can reach the port.

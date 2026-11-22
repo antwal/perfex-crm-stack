@@ -4,6 +4,37 @@ The changes of each version of the template, in the format of [Keep a Changelog]
 numbered MAJOR.MINOR.PATCH. The functions of `project/lib.sh` listed in "Writing your own script" (the generated README) are the API
 of the scripts you write yourself: they keep their names and arguments until the next major version.
 
+## [Unreleased]
+
+### Added
+
+- `base-url.sh status|dynamic|fixed [<target>]`, for an instance reached through a tunnel (ngrok, Cloudflare Tunnel) or an HTTPS
+  proxy with a self-signed certificate. Perfex builds its links with the address the installation wizard wrote in `APP_BASE_URL`
+  (`application/config/app-config.php`), and behind a tunnel the page does not come back. `dynamic` comments that `define` and adds,
+  between two marker lines, a block that keeps the configured address on the command line and, on the web, takes the scheme
+  (`X-Forwarded-Proto`, `HTTPS`, port 443) and the host (`X-Forwarded-Host`, else `Host`) from the request; `fixed` removes the
+  block and uncomments the line; `status` says which of the two the file is in and changes nothing. A copy of the file is kept in
+  `/repo/.app-config-<target>.php.bak` first, the new file is checked with `php -l` before it replaces the old one, the owner,
+  the mode and the line endings are kept (the file the wizard writes is CRLF), and only the `APP_BASE_URL` line is read or
+  printed: the file holds the credentials of the instance. A file edited by hand, or an address that is not in the shape the
+  wizard writes, is refused. **Test instance only:** the application then trusts the `Host` header of every request; the script
+  and the READMEs say so. The generated README has the same block to paste by hand.
+- `doctor.sh` says, as a note and never a failure, whether the application is installed and whether `APP_BASE_URL` is fixed or
+  dynamic; `doctor.sh --guide` names `base-url.sh dynamic` in step 6.
+- The AI section (`ai/AGENTS-section.md`, `ai/memory-note.md`, prompt B) lists `base-url.sh`: `dynamic` and `fixed` change a file
+  of the instance, so an agent runs them only when the owner asks; `status` is always fine.
+- Tests. `scripts-test.sh` runs the very script that `base-url.sh` sends to the server against a folder tree, with a file in LF
+  and the same file in CRLF: the round trip gives the original back byte for byte (a file with no final newline gets one), a value that could carry code, two defines, a
+  path in the address, a missing file or a symbolic link, a failing `php -l` and a file edited by hand are refused with the file
+  untouched, hostile parameters are refused on the server too. With the real `php` of the machine, when there is one, the patched
+  file loads and the block gives the right address for each kind of request. It also runs the checks that `doctor.sh` sends to the
+  server against a folder tree, for each state of `APP_BASE_URL`.
+
+### Changed
+
+- `install-perfex.sh` (header and closing message) and the READMEs name `base-url.sh dynamic` where they say to remove the
+  `install` folder after the wizard; `lib.sh` lists `base-url.sh` among the scripts that call `ensure_locked_sh` (no code change).
+
 ## [0.4.0]
 
 ### Added

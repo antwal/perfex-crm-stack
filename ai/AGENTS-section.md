@@ -38,6 +38,7 @@ Commands, from the project root:
 {{DEST_REL}}/run.sh 'cd /repo/{{SYNC_DIR}}/<module> && PATH=/opt/php/{{DEPLOY_PHP}}:$PATH composer test:int'   # integration tests against the instance (a module without Composer: php tests/integration.php, or its own command)
 {{DEST_REL}}/snapshot.sh [<label>]                   # database dump + archive of /app, kept on the server
 {{DEST_REL}}/doctor.sh                               # checks of the whole stack
+{{DEST_REL}}/base-url.sh status|dynamic|fixed        # APP_BASE_URL of the application: fixed (the wizard's), or following the request behind a tunnel
 bash {{DEST_REL}}/tests/deploy-test.sh               # deploy.sh against a fake ssh and rsync: no server is touched
 ```
 
@@ -52,7 +53,8 @@ Rules:
   a file of the repository, chat, logs or commits. A credential that appears in chat or in a screenshot must be rotated.
 - The instance is throw-away: never real data. The application's source lives in `/app` on the server and never in this repository.
 - Changes to the instance's own files (`/app/.htaccess`, the application's configuration) only with the owner's permission, and with a
-  backup outside the web folder (`/repo/.<name>.bak`).
+  backup outside the web folder (`/repo/.<name>.bak`). `base-url.sh dynamic` and `fixed` change `app-config.php` of the instance: only
+  when the owner asks (the script keeps the copy itself); `status` is always fine.
 - In a browser, the login is the owner's: do not type credentials on a host that is not local. File uploads from the browser are the
   owner's too; verify the result over SSH.
 - `{{DEST_REL}}/` is written by the template's `render.sh` from a parameter file: change the parameters and render again, do not

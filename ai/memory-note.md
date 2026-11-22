@@ -18,6 +18,7 @@ container. Written by render.sh on {{RENDER_DATE}}; the full procedure is in `{{
 - Mailpit (if present): `{{MAILPIT_URL}}` (API `/api/v1/messages`), SMTP `{{MAILPIT_SMTP_HOST}}:{{MAILPIT_SMTP_PORT}}`.
 - Scripts in `{{DEST_REL}}/`: `sync.sh`, `deploy.sh [--adopt] <module> [<target>]` (modules `{{DEPLOY_MODULES}}`), `ci-local.sh`,
   `run.sh '<command>'`, `snapshot.sh`, `reset.sh` (a person types the snapshot name: do not run it), `doctor.sh`, `install-perfex.sh`,
+  `base-url.sh status|dynamic|fixed` (`dynamic` and `fixed` change `app-config.php`: only when the owner asks),
   `extra/` (the owner's own scripts, same rules) and `tests/` (fake ssh and rsync, no server touched).
 
 **How to apply:** for practical checks use `curl` from your machine to `{{APP_URL}}` and `ssh {{SSH_ALIAS}}` (or `run.sh`) for logs, deploys,

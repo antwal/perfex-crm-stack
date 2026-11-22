@@ -9,6 +9,7 @@
 # (if you do not own a license yet, buy it at https://codecanyon.net/item/perfex-powerful-open-source-crm/14013737).
 # The folder or zip you pass is only read. Afterwards: open the application URL, complete the installation wizard in the
 # browser (you create the administrator there), then remove the install folder:  run.sh 'rm -rf /app/install'
+# (behind a tunnel or an HTTPS proxy: base-url.sh dynamic, after the wizard).
 # Only the first target (/app) is handled; a second instance (/app-extra, see stack/web-extra.yml) is copied by hand with
 # rsync over the SSH alias into /app-extra, which the tools container mounts.
 # Values come from stack.conf, not from this file.
@@ -77,3 +78,4 @@ REMOTE
 fi
 echo "copied to /app on the server. Next: open $APP_URL and complete the installation wizard in the browser,"
 echo "then remove the install folder:  $DEST_DIR/run.sh 'rm -rf /app/install'"
+echo "(behind a tunnel or an HTTPS proxy, after the wizard: $DEST_DIR/base-url.sh dynamic)"

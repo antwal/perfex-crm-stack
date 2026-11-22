@@ -75,12 +75,13 @@ perfex-crm-stack/
 │   ├── snapshot.sh        a dump of the database and an archive of /app, kept on the server
 │   ├── reset.sh           puts a snapshot back, after you type its name (--list shows them)
 │   ├── install-perfex.sh  copies your Perfex CRM (a folder or a zip) into /app
+│   ├── base-url.sh        makes APP_BASE_URL follow the request behind a tunnel or an HTTPS proxy (test instance only), or puts the wizard's address back
 │   ├── locked.sh          runs on the server: one heavy job at a time (flock), low priority, its process group ended with the job
 │   ├── extra/             README.md only: your own scripts, never touched by render.sh --force
 │   └── tests/             four tests with a fake ssh, rsync and curl: no server is touched
 │       ├── deploy-test.sh           deploy.sh from your machine, and its server script against a folder tree
 │       ├── locked-test.sh           run.sh and locked.sh
-│       ├── scripts-test.sh          ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh, doctor.sh and the scripts of examples/extra/ (fake git and npx too)
+│       ├── scripts-test.sh          ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh, base-url.sh, doctor.sh and the scripts of examples/extra/ (fake git and npx too)
 │       └── render-test.sh           render.sh with good and bad parameters (it finds the template through TEMPLATE_REL, or STACK_TEMPLATE_DIR)
 ├── examples/              neutral examples: a parameter file, two modules, three scripts for extra/
 │   ├── params/example.env       a filled-in parameter file with neutral values
@@ -238,11 +239,12 @@ From the project root; every command has the values of your project (`tools/dock
 | `tools/docker/snapshot.sh`, `reset.sh <name>` | database dump + archive of `/app`; put it back after you type its name |
 | `tools/docker/doctor.sh [--guide]` | check the stack from your machine; print the setup steps with your values |
 | `tools/docker/install-perfex.sh <folder or zip>` | copy your Perfex CRM into `/app` |
+| `tools/docker/base-url.sh status\|dynamic\|fixed [<target>]` | `APP_BASE_URL` of the application: the wizard's address (`fixed`), or following the request behind a tunnel or an HTTPS proxy (`dynamic`, test instance only) |
 
 **The lock.** `locked.sh` is a file of the project folder, not of the image: `sync.sh` copies it to the server next to the
-code (`deploy.sh` and `ci-local.sh` run `sync.sh` first), and `run.sh`, `snapshot.sh`, `reset.sh` and `install-perfex.sh` (with a
+code (`deploy.sh` and `ci-local.sh` run `sync.sh` first), and `run.sh`, `snapshot.sh`, `reset.sh`, `base-url.sh` and `install-perfex.sh` (with a
 zip) put it there themselves when it is missing, so it always evolves with the template. Heavy jobs (`deploy.sh`,
-`ci-local.sh`, `run.sh`, `snapshot.sh`, `reset.sh`, `install-perfex.sh` with a zip) wait for
+`ci-local.sh`, `run.sh`, `snapshot.sh`, `reset.sh`, `base-url.sh`, `install-perfex.sh` with a zip) wait for
 each other with `flock` and run at low priority in a process group that is terminated when the job ends: a test server left
 running in the background does not hold the lock.
 
@@ -292,6 +294,8 @@ smallest complete script. `examples/extra/` has three to copy: Infection on the 
 - Composer stops a script after 300 seconds: `"process-timeout": 0` in the `composer.json` of a module with a long suite.
 - A module without Composer that keeps third-party code in a folder named `vendor/` needs `vendor/` removed from `SYNC_EXCLUDES`,
   or `sync.sh` leaves that folder on your machine and the server never sees it.
+- Behind a tunnel or an HTTPS proxy, Perfex keeps building links with the address of the wizard: `base-url.sh dynamic` makes
+  `APP_BASE_URL` follow the request (test instance only: the application then trusts the `Host` header).
 - A credential pasted in chat or visible in a screenshot is compromised: rotate it.
 
 ## 9. Security
@@ -305,7 +309,8 @@ smallest complete script. `examples/extra/` has three to copy: Infection on the 
 
 Also: the sshd of the tools container allows `www-data` only, with `AllowTcpForwarding no` (switch on with `SSH_TCP_FORWARDING=1`);
 the web server lists no directories and reports no version; PHP-FPM is reachable from Apache only; `deploy.sh`, `ci-local.sh`,
-`snapshot.sh` and `reset.sh` accept only names from closed lists or strict patterns, checked on your machine and again on the server.
+`snapshot.sh`, `reset.sh` and `base-url.sh` accept only names from closed lists or strict patterns, checked on your machine and again on the server.
+`base-url.sh dynamic` makes the application trust the `Host` header of every request: for a throw-away instance, never for a real site.
 
 ## 10. License
 

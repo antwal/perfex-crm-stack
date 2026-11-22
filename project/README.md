@@ -148,9 +148,10 @@ it. The four values become the Portainer variables of step 5 and go nowhere else
 ```
 
 It checks the SSH login, PHP and Composer in the container, the mounts, the stack variables (names only), the database,
-that `locked.sh` is on the server, and that `{{APP_URL}}` answers. On a fresh stack it reports `locked.sh` missing: `sync.sh`
-puts it there together with your code (deploy and the matrix run it first), and `run.sh`, `snapshot.sh`, `reset.sh` and
-`install-perfex.sh` copy it by themselves when it is not there yet.
+that `locked.sh` is on the server, and that `{{APP_URL}}` answers; once the application is installed it also says, as a note,
+whether `APP_BASE_URL` is fixed or dynamic (see step 7). On a fresh stack it reports `locked.sh` missing: `sync.sh`
+puts it there together with your code (deploy and the matrix run it first), and `run.sh`, `snapshot.sh`, `reset.sh`,
+`install-perfex.sh` and `base-url.sh` copy it by themselves when it is not there yet.
 
 ### Step 7, the application
 
@@ -170,6 +171,50 @@ install folder, and point the application's email at Mailpit if you use it (Setu
 {{DEST_REL}}/run.sh 'rm -rf /app/install'
 ```
 
+**Behind a tunnel or an HTTPS proxy.** If you reach the instance through a tunnel (ngrok, Cloudflare Tunnel) or an HTTPS proxy
+with a self-signed certificate, Perfex builds its links with the address the wizard wrote in `APP_BASE_URL`
+(`application/config/app-config.php`), and the page does not come back. This makes the address follow the request instead:
+
+```bash
+{{DEST_REL}}/base-url.sh dynamic
+```
+
+`{{DEST_REL}}/base-url.sh fixed` puts the wizard's address back, and `{{DEST_REL}}/base-url.sh status` says which of the two you
+have. The script comments the `define('APP_BASE_URL', …)` line of the wizard and adds, between two marker lines, a block that on
+the command line (cron) keeps the configured address and on the web takes the scheme (`X-Forwarded-Proto`, `HTTPS`, port 443)
+and the host (`X-Forwarded-Host`, else `Host`) from the request. It keeps a copy of the file in `/repo/.app-config-app.php.bak`
+first, checks the new file with `php -l` before it replaces the old one, and keeps the line endings of the file (the wizard
+writes CRLF). **Test instance only:** with `dynamic` the application trusts the `Host` header of every request, so a forged
+header poisons the links in the emails it sends (a password reset, for one); on a real site that is a hole, never do it there.
+Wait a few seconds after the change: the web container's opcache revalidates every two seconds. A file you already corrected by
+hand, with a block of your own, has none of the markers the script looks for: `status` says "edited by hand" and `dynamic`
+refuses; put the line the wizard wrote back, then run `dynamic`.
+
+By hand: comment the `define('APP_BASE_URL', …)` line of `application/config/app-config.php` (put `// ` in front of it) and paste
+this block right after it, with your address in the first `define`:
+
+```php
+// perfex-crm-stack: dynamic APP_BASE_URL (base-url.sh), begin
+// The address follows the request, so that the instance also answers through a tunnel or an HTTPS proxy (ngrok, Cloudflare
+// Tunnel, a reverse proxy with a self-signed certificate). On the command line (cron) the configured address stays.
+// TEST INSTANCE ONLY: the base URL trusts the Host header of the request. Remove with: base-url.sh fixed
+if (php_sapi_name() === 'cli' || (empty($_SERVER['HTTP_X_FORWARDED_HOST']) && empty($_SERVER['HTTP_HOST']))) {
+    define('APP_BASE_URL', '{{APP_URL}}/');
+} else {
+    $is_https = (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+        || (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443);
+    $host = !empty($_SERVER['HTTP_X_FORWARDED_HOST']) ? $_SERVER['HTTP_X_FORWARDED_HOST'] : $_SERVER['HTTP_HOST'];
+    $host = trim(explode(',', $host)[0]);
+    define('APP_BASE_URL', ($is_https ? 'https://' : 'http://') . $host . '/');
+    unset($is_https, $host);
+}
+// perfex-crm-stack: dynamic APP_BASE_URL (base-url.sh), end
+```
+
+(With the original line commented by `// ` and the two marker lines kept as above, `base-url.sh status` and `fixed` understand
+a file edited this way.)
+
 If your modules or an API need the `Authorization` header (Bearer tokens, Basic), set the stack variable
 `PASS_AUTHORIZATION=1` and update the stack (see "The Authorization header" below).
 
@@ -188,9 +233,10 @@ Every command below is relative to the project root: `cd "{{PROJECT_ROOT_ABS}}"`
 | `{{DEST_REL}}/reset.sh <name>` / `--list` | puts a snapshot back after you type its name; `--list` shows the snapshots |
 | `{{DEST_REL}}/doctor.sh` / `--guide` | the checks / the setup steps with your values |
 | `{{DEST_REL}}/install-perfex.sh <folder or zip>` | copies your Perfex CRM into `/app` (step 7) |
+| `{{DEST_REL}}/base-url.sh status\|dynamic\|fixed [<target>]` | `APP_BASE_URL` of the application: the one the wizard wrote (`fixed`), or following the request behind a tunnel or an HTTPS proxy (`dynamic`, test instance only); `status` changes nothing (step 7) |
 | `bash {{DEST_REL}}/tests/deploy-test.sh` | deploy.sh against a fake ssh and rsync, and its server script against a folder tree: nothing touches a server |
 | `bash {{DEST_REL}}/tests/locked-test.sh` | run.sh and locked.sh without a server |
-| `bash {{DEST_REL}}/tests/scripts-test.sh` | ci-local.sh (and its server script against a folder tree, with the example module `plain_module/` too), snapshot.sh, reset.sh, install-perfex.sh, doctor.sh, the copy of locked.sh by run.sh and the example scripts of the template's `examples/extra/`, against a fake ssh, rsync, curl, git, npx, composer and php |
+| `bash {{DEST_REL}}/tests/scripts-test.sh` | ci-local.sh (and its server script against a folder tree, with the example module `plain_module/` too), snapshot.sh, reset.sh, install-perfex.sh, base-url.sh (its server script against an `app-config.php` in LF and in CRLF), doctor.sh, the copy of locked.sh by run.sh and the example scripts of the template's `examples/extra/`, against a fake ssh, rsync, curl, git, npx, composer and php |
 | `bash {{DEST_REL}}/tests/render-test.sh` | `render.sh`, with good and bad parameters (it finds the template through `TEMPLATE_REL`, or `STACK_TEMPLATE_DIR`) |
 | `{{DEST_REL}}/extra/` | your own scripts; `render.sh --force` rewrites only its `README.md` (see "Writing your own script" below) |
 
@@ -210,7 +256,7 @@ PHP versions are chosen with `PATH=/opt/php/<version>:$PATH`: a shim that makes 
 `vendor/bin/*` and the check file of a module without Composer too. The release package of a module does **not** go through `deploy.sh`: your build produces it and you
 install it from the application's interface, as a customer would.
 
-A heavy job at a time: `deploy.sh`, `ci-local.sh`, `run.sh`, `snapshot.sh` and `reset.sh` wait for each other at the lock
+A heavy job at a time: `deploy.sh`, `ci-local.sh`, `run.sh`, `snapshot.sh`, `reset.sh` and `base-url.sh` wait for each other at the lock
 `{{LOCK_FILE}}` and run at low priority. If the lock is busy for over a minute, the script says so and keeps waiting.
 
 ### What a module needs to be deployed
@@ -396,7 +442,7 @@ or `SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1` (needs `mod_setenvif`).
 - `app/` on the server is a **copy** of the application: your own copy of the source stays on your machine, outside the repository.
 - Changes to the instance's own files (`.htaccess`, the application's configuration) only with the owner's permission and with
   a backup outside the web folder: `/repo/.<name>.bak`.
-- `deploy.sh`, `ci-local.sh`, `snapshot.sh`, `reset.sh` and `install-perfex.sh` accept only the modules, targets and aliases
+- `deploy.sh`, `ci-local.sh`, `snapshot.sh`, `reset.sh`, `install-perfex.sh` and `base-url.sh` accept only the modules, targets and aliases
   listed in `stack.conf` (or found as `<name>/<name>.php`): to allow another, change the parameters and render again, do
   not loosen the check.
 - `reset.sh` asks a person to type the snapshot name. An AI agent does not set `STACK_RESET_YES` and does not pipe an answer:

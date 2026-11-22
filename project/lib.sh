@@ -119,7 +119,7 @@ remote_locked() {
 
 # ensure_locked_sh: locked.sh must be on the server before remote_locked can use it. sync.sh copies it together with the
 # code (deploy.sh and ci-local.sh run sync.sh first); the scripts that do not sync (run.sh, snapshot.sh, reset.sh,
-# install-perfex.sh) call this first: one ssh round trip, and the copy only when the file is missing. The probe reads
+# install-perfex.sh, base-url.sh) call this first: one ssh round trip, and the copy only when the file is missing. The probe reads
 # /dev/null, so the caller's standard input stays for the command.
 ensure_locked_sh() {
     if ! ssh "$HOST" "test -f $(printf '%q' "$LOCKED_SH")" < /dev/null; then

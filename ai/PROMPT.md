@@ -75,7 +75,8 @@ stop for my answer where a step says so.
 6. Run `<DEST_DIR>/doctor.sh` and show me the output. If the application is not installed yet, tell me to run
    `<DEST_DIR>/install-perfex.sh` with my own licensed copy of Perfex CRM (if I do not own a license yet, I buy it at
    https://codecanyon.net/item/perfex-powerful-open-source-crm/14013737), and wait: the installation wizard in the
-   browser is mine.
+   browser is mine. After the wizard, if I reach the instance through a tunnel or an HTTPS proxy, I tell you and you run
+   `<DEST_DIR>/base-url.sh dynamic` (test instance only: the application then trusts the `Host` header).
 7. Install `<DEST_DIR>/ai/AGENTS-section.md` as its header says (in `AGENTS.md`, or `CLAUDE.md` for Claude Code, between its
    two markers, creating the file if it is missing; commit nothing); if you are Claude Code, also keep
    `<DEST_DIR>/ai/memory-note.md` in your memory. Then run `bash <DEST_DIR>/tests/deploy-test.sh` and
