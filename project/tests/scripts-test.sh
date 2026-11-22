@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests the other scripts (ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh, doctor.sh) without touching any server,
+# Tests the other scripts (ci-local.sh, snapshot.sh, reset.sh, install-perfex.sh, base-url.sh, doctor.sh) without touching any server,
 # with a fake ssh, rsync, curl, git and npx that only record their calls: every refusal must happen BEFORE any call, a valid
 # request must reach the server in the shape the server-side scripts expect, and doctor.sh must count what the server
 # reports. (deploy.sh has its own test, tests/deploy-test.sh; run.sh and locked.sh tests/locked-test.sh.)
@@ -7,6 +7,10 @@
 # The job of ci-local.sh reaches the server as a script on the standard input. This test takes that very text from the recorded
 # call and runs it against a folder tree standing in for the server (STACK_SERVER_ROOT), with a fake composer and a fake php: a
 # module with a composer.json takes the Composer road, one without it php -l on its PHP files and then the check file.
+#
+# base-url.sh works the same way: its refusals and the shape of its call, then the very script it sends to the server, run against
+# a folder tree with an app-config.php in LF and one in CRLF (the file the Perfex wizard writes is CRLF), with the fake php and, when
+# this machine has one, the real php (the patched file must load, and the block must give the right address for each request).
 #
 # It also tests the example scripts of the template, examples/extra/ (infection-diff.sh, bench.sh, e2e.sh): it finds the
 # template through TEMPLATE_REL of stack.conf, or STACK_TEMPLATE_DIR, copies them into the work folder as if they were in
@@ -220,13 +224,13 @@ echo "$*" >> "$STACK_TEST_COMPOSER_LOG"
 FAKE
     cat > "$WORK/fakebin/php" <<'FAKE'
 #!/usr/bin/env bash
-# fake php: records the call; -v prints a version line, -l says whether the file holds the text SYNTAX ERROR; any other call
-# (a check file run by php) exits with STACK_TEST_PHP_STATUS
+# fake php: records the call; -v prints a version line, -l says whether the file holds the text SYNTAX ERROR (or fails for any
+# file when STACK_TEST_PHP_LINT_FAIL=1); any other call (a check file run by php) exits with STACK_TEST_PHP_STATUS
 echo "$*" >> "$STACK_TEST_PHP_LOG"
 case "${1:-}" in
     -v) echo "PHP 8.4.0 (cli) (fake)"; exit 0 ;;
     -l)
-        if grep -q 'SYNTAX ERROR' "${2:-}" 2>/dev/null; then echo "PHP Parse error: syntax error in ${2:-} on line 1"; exit 255; fi
+        if [ "${STACK_TEST_PHP_LINT_FAIL:-}" = 1 ] || grep -q 'SYNTAX ERROR' "${2:-}" 2>/dev/null; then echo "PHP Parse error: syntax error in ${2:-} on line 1"; exit 255; fi
         echo "No syntax errors detected in ${2:-}"; exit 0 ;;
 esac
 exit "${STACK_TEST_PHP_STATUS:-0}"
@@ -462,6 +466,233 @@ if [ "$STATUS" -eq 1 ] && [ "$(wc -l < "$CALLS" | tr -d ' ')" -eq 2 ] && ! calle
     good "run.sh: the status of the locked job (1) is not the answer of the probe, so locked.sh is not copied again"
 else
     bad "run.sh: a failing job was mixed up with the probe (status $STATUS): $(cat "$CALLS")"
+fi
+
+# ---- base-url.sh ---------------------------------------------------------------------------------------------------------------------
+echo "--- base-url.sh"
+T1="${APP_TARGETS%% *}"
+refused "no argument"                          base-url.sh
+refused "an action that is not one"            base-url.sh nuke
+refused "an action with a command"             base-url.sh 'dynamic;id'
+refused "an option instead of an action"       base-url.sh --dynamic
+refused "a target that is not in APP_TARGETS"  base-url.sh status elsewhere
+refused "a target with a command"              base-url.sh status 'app;id'
+STACK_SSH='-oProxyCommand=x' refused "an SSH alias that is an option" base-url.sh status
+refused "three arguments"                      base-url.sh status "$T1" extra
+sh_run base-url.sh status
+if [ "$STATUS" -eq 0 ] && [ "$(grep -c '^ssh ' "$CALLS" | tr -d ' ')" -eq 2 ] && [ "$(wc -l < "$CALLS" | tr -d ' ')" -eq 2 ] \
+    && [ "$(job_words)" -eq 2 ] && [ "$(job_text)" = "bash -s -- status $T1 $DEFAULT_PHP" ]; then
+    good "base-url.sh: status goes through locked.sh as a script on the standard input: the probe of locked.sh and the job, the target by default"
+else
+    bad "base-url.sh: a valid status misbehaved (status $STATUS, $(job_words) words): $(job_text) / $(cat "$CALLS")"
+fi
+BU_SCRIPT="$(stdin_script)"
+if [ -n "$BU_SCRIPT" ] && grep -qF 'X-Forwarded-Proto' "$BU_SCRIPT" && grep -qF 'php -l' "$BU_SCRIPT" && ! grep -qF '/app/application' "$BU_SCRIPT"; then
+    good "base-url.sh: the script holds the block and php -l, and the target is not pasted into its text"
+    cp "$BU_SCRIPT" "$WORK/bu-remote.sh"
+else
+    bad "base-url.sh: the script on the standard input is missing, lacks the block or php -l, or carries the target: ${BU_SCRIPT:-none}"
+fi
+# what the server says is what you see: nothing is added on this side (the fake ssh prints its text for the probe of locked.sh too,
+# so the same line comes twice: no line but that one)
+printf '%s\n' 'APP_BASE_URL is fixed: http://said.by.the.server/' > "$WORK/bu-said"
+STACK_TEST_SSH_OUT="$(cat "$WORK/bu-said")" sh_run base-url.sh status
+if [ "$STATUS" -eq 0 ] && [ "$(sort -u "$WORK/out")" = "$(cat "$WORK/bu-said")" ]; then good "base-url.sh: its output is the output of the server, no line added"; else bad "base-url.sh: the output is not the server's alone (status $STATUS): $(cat "$WORK/out")"; fi
+STACK_TEST_LOCKED_STATUS=1 sh_run base-url.sh dynamic
+if [ "$STATUS" -eq 1 ]; then good "base-url.sh: the exit status is the server's (1)"; else bad "base-url.sh: the status of the server job was lost (status $STATUS)"; fi
+set_conf APP_TARGETS "$T1 $T1-extra"
+sh_run base-url.sh dynamic "$T1-extra"
+if [ "$STATUS" -eq 0 ] && [ "$(job_words)" -eq 2 ] && [ "$(job_text)" = "bash -s -- dynamic $T1-extra $DEFAULT_PHP" ]; then
+    good "base-url.sh: a second target of APP_TARGETS reaches the job as a parameter"
+else
+    bad "base-url.sh: the second target was not passed (status $STATUS): $(job_text)"
+fi
+cp "$WORK/stack.conf.ci-keep" "$WORK/docker/stack.conf"
+
+# ---- base-url.sh, the script of the server, against a folder tree ----------------------------------------------------------------------
+echo "--- base-url.sh: the script of the server, against a folder tree"
+if [ ! -s "$WORK/bu-remote.sh" ]; then
+    bad "no server script was captured from base-url.sh"
+elif [ ! -x "$WORK/fakebin/php" ] || ! type check > /dev/null 2>&1; then
+    bad "base-url.sh: the fake php and the helpers of the ci-local.sh section are missing: that section did not run"
+else
+    BU="$WORK/bu-server"; BUDIR="$BU/$T1/application/config"; BUCFG="$BUDIR/app-config.php"; BUBAK="$BU/repo/.app-config-$T1.php.bak"
+    BU_URL="http://myproject.perfexcrm.docker/"
+    BU_BEGIN='// perfex-crm-stack: dynamic APP_BASE_URL (base-url.sh), begin'
+    BU_END='// perfex-crm-stack: dynamic APP_BASE_URL (base-url.sh), end'
+    BU_CR="$(printf '\r')"
+    remote_bu() { # remote_bu <action> <target> <php>: sets RSTATUS; the output is in $WORK/rout; the fake php is the only addition to the PATH
+        : > "$PHP_LOG"
+        PATH="$WORK/fakebin:$PATH" STACK_SERVER_ROOT="$BU" STACK_TEST_PHP_LOG="$PHP_LOG" bash "$WORK/bu-remote.sh" "$@" > "$WORK/rout" 2>&1 < /dev/null
+        RSTATUS=$?
+    }
+    mk_cfg() { # mk_cfg <lf|crlf>: the file the wizard writes (ten lines, mode 640) in the tree of the server, and a copy of it in $WORK/bu-orig.php.
+               # BU_DEFINE replaces the define line of APP_BASE_URL, BU_EXTRA is one more line after it
+        local def="${BU_DEFINE:-}"
+        [ -n "$def" ] || def="define('APP_BASE_URL', '$BU_URL');"
+        rm -rf "$BU"; mkdir -p "$BUDIR" "$BU/repo"
+        printf '%s\n' '<?php' '// the installation wizard wrote this file' "define('APP_ENC_KEY', 'not-a-real-key');" "$def" ${BU_EXTRA:+"$BU_EXTRA"} \
+            "define('APP_DB_HOSTNAME', 'localhost');" "define('APP_DB_NAME', 'x');" "define('APP_DB_PASSWORD', 'not-a-real-password');" \
+            "define('APP_DB_PREFIX', 'tbl');" '// the end' 'return;' > "$BUCFG"
+        if [ "$1" = crlf ]; then awk '{ print $0 "\r" }' "$BUCFG" > "$BUCFG.crlf" && mv "$BUCFG.crlf" "$BUCFG"; fi
+        chmod 640 "$BUCFG"
+        cp -p "$BUCFG" "$WORK/bu-orig.php"
+    }
+    bu_same() { cmp -s "$WORK/bu-orig.php" "$BUCFG"; }                              # the file is as the wizard wrote it
+    bu_clean() { [ -z "$(find "$BUDIR" -name 'app-config.php.*')" ]; }              # no working file left next to it
+    bu_refused() { # bu_refused <label> <text of the refusal>: the last remote_bu failed, said that text, and left the file untouched
+        if [ "$RSTATUS" -ne 0 ] && grep -qF -- "$2" "$WORK/rout" && bu_same && bu_clean; then good "$1"; else bad "$1 (status $RSTATUS): $(cat "$WORK/rout")"; fi
+    }
+    bu_stripped() { # the file without the lines between the markers, and with the define uncommented, is what the wizard wrote (LF files)
+        sed -e '/dynamic APP_BASE_URL (base-url.sh), begin$/,/dynamic APP_BASE_URL (base-url.sh), end$/d' -e "s#^// \(define('APP_BASE_URL'\)#\1#" "$BUCFG" | cmp -s - "$WORK/bu-orig.php"
+    }
+
+    # a. the file the wizard wrote: status
+    mk_cfg lf
+    remote_bu status "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server: status of the file the wizard wrote says fixed, with the address" sh -c "[ $RSTATUS -eq 0 ] && grep -qxF 'APP_BASE_URL is fixed: $BU_URL' '$WORK/rout'"
+
+    # b. dynamic
+    remote_bu dynamic "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server: dynamic succeeds and the copy of the file is identical to what the wizard wrote" sh -c "[ $RSTATUS -eq 0 ] && cmp -s '$WORK/bu-orig.php' '$BUBAK'"
+    check "base-url.sh server: the define is commented, the block is between its two markers and defines the address for the command line" \
+        sh -c "grep -qxF \"// define('APP_BASE_URL', '$BU_URL');\" '$BUCFG' && grep -qxF '$BU_BEGIN' '$BUCFG' && grep -qxF '$BU_END' '$BUCFG' && grep -qxF \"    define('APP_BASE_URL', '$BU_URL');\" '$BUCFG' && grep -qF 'HTTP_X_FORWARDED_PROTO' '$BUCFG'"
+    check "base-url.sh server: without the block and with the define uncommented the file is what the wizard wrote" bu_stripped
+    check "base-url.sh server: the other lines (the key, the database) are still there, and none of them is in the output" \
+        sh -c "grep -qF 'not-a-real-key' '$BUCFG' && grep -qF \"define('APP_DB_NAME', 'x');\" '$BUCFG' && grep -qF 'not-a-real-password' '$BUCFG' && ! grep -qF 'not-a-real' '$WORK/rout' && ! grep -qF 'APP_DB_NAME' '$WORK/rout' && ! grep -qF 'APP_ENC_KEY' '$WORK/rout'"
+    check "base-url.sh server: the new text was checked with php -l (on a file next to the config) before it replaced it, and nothing was left behind" \
+        sh -c "grep -qE -- '^-l .*app-config\.php\.base-url\.tmp\$' '$PHP_LOG' && [ -z \"\$(find '$BUDIR' -name 'app-config.php.*')\" ]"
+    check "base-url.sh server: the mode of the file is kept (640)" sh -c "[ \"\$(ls -l '$BUCFG' | cut -c1-10)\" = '-rw-r-----' ] && [ \"\$(ls -l '$BUBAK' | cut -c1-10)\" = '-rw-r-----' ]"
+    check "base-url.sh server: the output warns that the application trusts the Host header, names the copy and the opcache wait" \
+        sh -c "grep -qF 'Host header' '$WORK/rout' && grep -qF '/repo/.app-config-$T1.php.bak' '$WORK/rout' && grep -qF 'opcache' '$WORK/rout'"
+    cp -p "$BUCFG" "$WORK/bu-dynamic.php"; cp -p "$BUBAK" "$WORK/bu-bak1.php"
+    if command -v php > /dev/null 2>&1; then
+        # the real PHP of this machine, no fake in the PATH: the file loads, and on the command line the configured address stays
+        PATH="$PATH" php -l "$BUCFG" > "$WORK/rout" 2>&1; RSTATUS=$?
+        check "base-url.sh server, real php: the patched file passes php -l" test "$RSTATUS" -eq 0
+        check "base-url.sh server, real php: on the command line the address is the configured one" \
+            sh -c "[ \"\$(php -r 'require \$argv[1]; echo APP_BASE_URL;' '$BUCFG')\" = '$BU_URL' ]"
+        # the web branch of the block: the block is run with the test of the command line removed, once per request
+        sed "s/php_sapi_name() === 'cli'/false/" "$BUCFG" > "$WORK/bu-web.php"
+        printf '%s\n' '<?php' 'parse_str((string) getenv("BU_SERVER"), $s);' '$_SERVER = array_merge($_SERVER, $s);' 'require $argv[1];' 'echo APP_BASE_URL;' > "$WORK/bu-web-run.php"
+        bu_web() { # bu_web <expected address> <query string of the $_SERVER values>
+            local got
+            got="$(BU_SERVER="$2" php "$WORK/bu-web-run.php" "$WORK/bu-web.php" 2>&1)"
+            if [ "$got" = "$1" ]; then good "base-url.sh server, real php: a request with {$2} gives $1"; else bad "base-url.sh server, real php: {$2} gave \"$got\" instead of $1"; fi
+        }
+        bu_web "http://a.example/"           "HTTP_HOST=a.example&SERVER_PORT=80"
+        bu_web "https://a.example/"          "HTTP_HOST=a.example&HTTP_X_FORWARDED_PROTO=https"
+        bu_web "https://tun.example/"        "HTTP_HOST=a.example&HTTP_X_FORWARDED_HOST=tun.example%2C+other&HTTP_X_FORWARDED_PROTO=https"
+        bu_web "http://b.example/"           "HTTP_HOST=b.example&HTTP_X_FORWARDED_HOST="
+        bu_web "https://a.example/"          "HTTP_HOST=a.example&SERVER_PORT=443"
+        bu_web "https://a.example/"          "HTTP_HOST=a.example&HTTPS=on"
+        bu_web "http://a.example/"           "HTTP_HOST=a.example&HTTPS=off&SERVER_PORT=80"
+        bu_web "http://a.example:8080/"      "HTTP_HOST=a.example:8080"
+        bu_web "http://c.example/"           "HTTP_X_FORWARDED_HOST=c.example"
+        bu_web "$BU_URL"                     "SERVER_PORT=80"
+    else
+        echo "skipped: no php on this machine (the real php check of the patched file and of the block)"
+    fi
+
+    # c. dynamic again: nothing to do, the file and the copy are as they were
+    remote_bu dynamic "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server: dynamic again says it is already dynamic and changes nothing (file and copy)" \
+        sh -c "[ $RSTATUS -eq 0 ] && grep -qF 'already dynamic' '$WORK/rout' && cmp -s '$WORK/bu-dynamic.php' '$BUCFG' && cmp -s '$WORK/bu-bak1.php' '$BUBAK'"
+
+    # d. status of the dynamic file
+    remote_bu status "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server: status of the patched file says dynamic, with the address of the command line" \
+        sh -c "[ $RSTATUS -eq 0 ] && grep -qF 'APP_BASE_URL is dynamic' '$WORK/rout' && grep -qF '$BU_URL' '$WORK/rout'"
+
+    # e. fixed: the file as it was, byte for byte; the copy stays
+    remote_bu fixed "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server: fixed gives the file back byte for byte, and the copy is still there" sh -c "[ $RSTATUS -eq 0 ] && cmp -s '$WORK/bu-orig.php' '$BUCFG' && [ -f '$BUBAK' ]"
+    check "base-url.sh server: fixed leaves no working file and keeps the mode" sh -c "[ -z \"\$(find '$BUDIR' -name 'app-config.php.*')\" ] && [ \"\$(ls -l '$BUCFG' | cut -c1-10)\" = '-rw-r-----' ]"
+
+    # f. fixed again
+    remote_bu fixed "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server: fixed again says it is already fixed and changes nothing" sh -c "[ $RSTATUS -eq 0 ] && grep -qF 'already fixed' '$WORK/rout' && cmp -s '$WORK/bu-orig.php' '$BUCFG'"
+
+    # g. a value with an apostrophe never reaches the PHP code
+    BU_DEFINE="define('APP_BASE_URL', 'http://x/'); system('id'); //');" mk_cfg lf
+    remote_bu dynamic "$T1" "$DEFAULT_PHP"
+    bu_refused "base-url.sh server: a value with an apostrophe is refused, the file is untouched" "not in the shape the wizard writes"
+    check "base-url.sh server: ... and no copy was made" test ! -e "$BUBAK"
+
+    # h. two defines of APP_BASE_URL: not the file the wizard writes
+    BU_EXTRA="define('APP_BASE_URL', 'http://other.example/');" mk_cfg lf
+    remote_bu dynamic "$T1" "$DEFAULT_PHP"
+    bu_refused "base-url.sh server: two define lines of APP_BASE_URL are refused, the file is untouched" "edited by hand"
+
+    # i. an address with a path: status says it, dynamic refuses
+    BU_DEFINE="define('APP_BASE_URL', 'http://host.example/sub/');" mk_cfg lf
+    remote_bu status "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server: status of an address with a path says fixed and gives it" sh -c "[ $RSTATUS -eq 0 ] && grep -qxF 'APP_BASE_URL is fixed: http://host.example/sub/' '$WORK/rout'"
+    remote_bu dynamic "$T1" "$DEFAULT_PHP"
+    bu_refused "base-url.sh server: dynamic with an address that has a path is refused (the root of its host), the file is untouched" "root of its host"
+
+    # j. no file, and a file that is a symbolic link
+    mk_cfg lf; rm -f "$BUCFG"
+    remote_bu status "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server: a missing app-config.php is refused, with the advice to install the application first" sh -c "[ $RSTATUS -ne 0 ] && grep -qF 'install the application first' '$WORK/rout'"
+    mk_cfg lf; rm -f "$BUCFG"; ln -s "$WORK/bu-orig.php" "$BUCFG"
+    remote_bu dynamic "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server: an app-config.php that is a symbolic link is refused, and nothing was written" \
+        sh -c "[ $RSTATUS -ne 0 ] && grep -qF 'install the application first' '$WORK/rout' && [ ! -e '$BUBAK' ] && [ -z \"\$(find '$BUDIR' -name 'app-config.php.*')\" ]"
+    mk_cfg lf
+    remote_bu status ghost-target "$DEFAULT_PHP"
+    check "base-url.sh server: a target that is not mounted is refused" sh -c "[ $RSTATUS -ne 0 ] && grep -qF 'is not mounted' '$WORK/rout'"
+
+    # l. php -l fails: the file is not replaced (the copy may exist: it was made first)
+    mk_cfg lf
+    STACK_TEST_PHP_LINT_FAIL=1 remote_bu dynamic "$T1" "$DEFAULT_PHP"
+    bu_refused "base-url.sh server: a new file that does not pass php -l is refused, the file is untouched and no working file is left" "php -l"
+
+    # m. a file edited by hand: a begin marker without its end
+    BU_EXTRA="$BU_BEGIN" mk_cfg lf
+    remote_bu status "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server: status of a file edited by hand says so and exits 1" sh -c "[ $RSTATUS -eq 1 ] && grep -qF 'edited by hand' '$WORK/rout'"
+    remote_bu dynamic "$T1" "$DEFAULT_PHP"
+    bu_refused "base-url.sh server: dynamic on a file edited by hand is refused, the file is untouched" "edited by hand"
+    remote_bu fixed "$T1" "$DEFAULT_PHP"
+    bu_refused "base-url.sh server: fixed on a file edited by hand is refused, the file is untouched" "edited by hand"
+
+    # n. hostile parameters are refused again on the server, before anything runs, and nothing is written
+    mk_cfg lf
+    before="$(find "$BU" | wc -l | tr -d ' ')"
+    for hostile in "dynamic;id|$T1|$DEFAULT_PHP" "dynamic|../x|$DEFAULT_PHP" "dynamic|$T1;id|$DEFAULT_PHP" "dynamic|$T1|8.4;id" "nuke|$T1|$DEFAULT_PHP"; do
+        remote_bu "$(echo "$hostile" | cut -d'|' -f1)" "$(echo "$hostile" | cut -d'|' -f2)" "$(echo "$hostile" | cut -d'|' -f3)"
+        check "base-url.sh server refuses {$hostile}, and nothing ran" sh -c "[ $RSTATUS -ne 0 ] && [ ! -s '$PHP_LOG' ]"
+    done
+    check "base-url.sh server: hostile parameters wrote nothing (file, copy, folders)" sh -c "[ \"\$(find '$BU' | wc -l | tr -d ' ')\" -eq $before ] && [ ! -e '$BUBAK' ]"
+    check "base-url.sh server: no stray file was created by an injected command" test -z "$(find "$BU" -name 'id' -o -name 'pwned')"
+
+    # o. the same file in CRLF, as the wizard writes it
+    mk_cfg crlf
+    remote_bu status "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server, CRLF: status says fixed, with the address (no CR in it)" sh -c "[ $RSTATUS -eq 0 ] && grep -qxF 'APP_BASE_URL is fixed: $BU_URL' '$WORK/rout'"
+    remote_bu dynamic "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server, CRLF: dynamic succeeds and the copy is identical to the CRLF original" sh -c "[ $RSTATUS -eq 0 ] && cmp -s '$WORK/bu-orig.php' '$BUBAK'"
+    check "base-url.sh server, CRLF: every line of the patched file ends with CR (the markers, the commented define and the block too)" \
+        sh -c "[ \"\$(grep -c '$BU_CR' '$BUCFG')\" -eq \"\$(wc -l < '$BUCFG' | tr -d ' ')\" ] && grep -qxF \"\$(printf '%s\\r' '$BU_BEGIN')\" '$BUCFG' && grep -qxF \"\$(printf '%s\\r' '$BU_END')\" '$BUCFG' && grep -qxF \"\$(printf '%s\\r' \"// define('APP_BASE_URL', '$BU_URL');\")\" '$BUCFG'"
+    if command -v php > /dev/null 2>&1; then
+        PATH="$PATH" php -l "$BUCFG" > "$WORK/rout" 2>&1; RSTATUS=$?
+        check "base-url.sh server, CRLF, real php: the patched file passes php -l" test "$RSTATUS" -eq 0
+        check "base-url.sh server, CRLF, real php: on the command line the address is the configured one" \
+            sh -c "[ \"\$(php -r 'require \$argv[1]; echo APP_BASE_URL;' '$BUCFG')\" = '$BU_URL' ]"
+    fi
+    remote_bu status "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server, CRLF: status of the patched file says dynamic" sh -c "[ $RSTATUS -eq 0 ] && grep -qF 'APP_BASE_URL is dynamic' '$WORK/rout'"
+    remote_bu fixed "$T1" "$DEFAULT_PHP"
+    check "base-url.sh server, CRLF: fixed gives the file back byte for byte" sh -c "[ $RSTATUS -eq 0 ] && cmp -s '$WORK/bu-orig.php' '$BUCFG'"
+
+    # p. a file without a final newline (edited by hand, never written so by the wizard) is valid after the round trip; it gets a final newline, nothing else changes
+    mk_cfg lf
+    size="$(wc -c < "$BUCFG" | tr -d ' ')"; head -c $((size - 1)) "$BUCFG" > "$BUCFG.cut" && mv "$BUCFG.cut" "$BUCFG"; chmod 640 "$BUCFG"; cp -p "$BUCFG" "$WORK/bu-orig.php"
+    remote_bu dynamic "$T1" "$DEFAULT_PHP"; first="$RSTATUS"
+    remote_bu fixed "$T1" "$DEFAULT_PHP"
+    { cat "$WORK/bu-orig.php"; echo; } > "$WORK/bu-expect.php"
+    check "base-url.sh server: a file without a final newline goes dynamic and back, and differs from the original by that newline alone" sh -c "[ $first -eq 0 ] && [ $RSTATUS -eq 0 ] && cmp -s '$WORK/bu-expect.php' '$BUCFG'"
 fi
 
 # ---- examples/extra ------------------------------------------------------------------------------------------------------------------
