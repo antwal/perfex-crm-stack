@@ -989,6 +989,11 @@ if [ "$STATUS" -eq 0 ] && grep -q "Host $SSH_ALIAS" "$WORK/out" && grep -q 'Port
 else
     bad "doctor.sh --guide misbehaved (status $STATUS)"
 fi
+if [ "$STATUS" -eq 0 ] && grep -qF "behind a tunnel or an HTTPS proxy, after the wizard: $DEST_DIR/base-url.sh dynamic" "$WORK/out"; then
+    good "doctor.sh --guide names base-url.sh dynamic for a tunnel or an HTTPS proxy, with the folder of the project"
+else
+    bad "doctor.sh --guide does not name base-url.sh dynamic: $(grep -n 'tunnel' "$WORK/out")"
+fi
 refused "an unknown argument" doctor.sh --nope
 STACK_TEST_SSH_STATUS=255 STACK_TEST_CURL_OUT=000 STACK_TEST_CURL_STATUS=6 sh_run doctor.sh
 if [ "$STATUS" -eq 2 ] && grep -q 'FAIL: cannot log in' "$WORK/out" && grep -q 'does not resolve from this machine' "$WORK/out"; then
@@ -996,12 +1001,46 @@ if [ "$STATUS" -eq 2 ] && grep -q 'FAIL: cannot log in' "$WORK/out" && grep -q '
 else
     bad "doctor.sh: failure path misbehaved (status $STATUS): $(cat "$WORK/out")"
 fi
-printf '%s\n' 'ok: PHP 8.4 (PHP 8.4.0)' 'note: variable MAILPIT_URL is not set (optional)' 'FAIL: variable PERFEX_DB_PASSWORD is not set in the SSH session' 'FAIL: locked.sh is not on the server' > "$WORK/report"
+printf '%s\n' 'ok: PHP 8.4 (PHP 8.4.0)' 'note: variable MAILPIT_URL is not set (optional)' 'FAIL: variable PERFEX_DB_PASSWORD is not set in the SSH session' 'FAIL: locked.sh is not on the server' \
+    'note: APP_BASE_URL is dynamic (base-url.sh): the application trusts the Host header, test instance only' > "$WORK/report"
 STACK_TEST_SSH_REPORT="$WORK/report" STACK_TEST_CURL_OUT=302 STACK_TEST_CURL_STATUS=0 sh_run doctor.sh
 if [ "$STATUS" -eq 2 ] && grep -q 'ok: SSH login' "$WORK/out" && grep -q 'FAIL: locked.sh is not on the server' "$WORK/out" && grep -q 'ok: GET .* answers 302' "$WORK/out"; then
     good "doctor.sh: it reports what the server says, counts the failures (2) and checks the application"
 else
     bad "doctor.sh: with a server report it misbehaved (status $STATUS): $(cat "$WORK/out")"
+fi
+if [ "$STATUS" -eq 2 ] && grep -q '^note: APP_BASE_URL is dynamic (base-url.sh): the application trusts the Host header' "$WORK/out" && grep -q 'doctor: 2 check(s) failed' "$WORK/out"; then
+    good "doctor.sh: the note on a dynamic APP_BASE_URL is reported and not counted as a failure (the status stays 2)"
+else
+    bad "doctor.sh: the note on APP_BASE_URL was not reported as a note (status $STATUS): $(cat "$WORK/out")"
+fi
+# the checks the server runs, against a folder tree: the text that doctor.sh sends is run with the file of the application pointed
+# at a tree (no other path changes: the other checks fail or pass on this machine and are not looked at)
+sh_run doctor.sh
+DR_SCRIPT="$(stdin_script)"
+if [ -n "$DR_SCRIPT" ] && grep -qF '/app/application/config/app-config.php' "$DR_SCRIPT"; then
+    DR_CFG="$WORK/doctor-app-config.php"
+    sed "s#/app/application/config/app-config.php#$DR_CFG#" "$DR_SCRIPT" > "$WORK/doctor-remote.sh"
+    dr_lines() { # dr_lines: the lines about the application and APP_BASE_URL that the server checks print for the file $DR_CFG (the environment is empty: no database, no URL)
+        env -i PATH="$PATH" bash "$WORK/doctor-remote.sh" "$LOCKED_SH" "" 0 2>&1 < /dev/null | grep -E 'APP_BASE_URL|not installed yet'
+    }
+    wizard_file() { printf '%s\n' '<?php' "define('APP_DB_PASSWORD', 'not-a-real-password');" "define('APP_BASE_URL', 'http://myproject.perfexcrm.docker/');" 'return;'; }
+    rm -f "$DR_CFG"
+    if [ "$(dr_lines)" = 'note: the application is not installed yet (no app-config.php in /app)' ]; then good "doctor.sh server checks: no app-config.php is a note that the application is not installed yet"; else bad "doctor.sh server checks: no app-config.php: $(dr_lines)"; fi
+    wizard_file > "$DR_CFG"
+    if [ "$(dr_lines)" = 'ok: APP_BASE_URL is fixed' ]; then good "doctor.sh server checks: the file as the wizard wrote it (LF) is ok: fixed, and no value of the file is printed"; else bad "doctor.sh server checks: LF file: $(dr_lines)"; fi
+    wizard_file | awk '{ print $0 "\r" }' > "$DR_CFG"
+    if [ "$(dr_lines)" = 'ok: APP_BASE_URL is fixed' ]; then good "doctor.sh server checks: the file in CRLF is ok: fixed"; else bad "doctor.sh server checks: CRLF file: $(dr_lines)"; fi
+    { wizard_file; echo '// perfex-crm-stack: dynamic APP_BASE_URL (base-url.sh), begin'; } > "$DR_CFG"
+    if [ "$(dr_lines)" = 'note: APP_BASE_URL is dynamic (base-url.sh): the application trusts the Host header, test instance only' ]; then good "doctor.sh server checks: the marker of base-url.sh is a note that APP_BASE_URL is dynamic"; else bad "doctor.sh server checks: dynamic file: $(dr_lines)"; fi
+    printf '%s\n' '<?php' "define('APP_DB_PASSWORD', 'not-a-real-password');" 'return;' > "$DR_CFG"
+    if [ "$(dr_lines)" = 'note: APP_BASE_URL is neither as the wizard wrote it nor as base-url.sh leaves it (edited by hand?)' ]; then good "doctor.sh server checks: a file with no define of APP_BASE_URL is a note (edited by hand)"; else bad "doctor.sh server checks: file without the define: $(dr_lines)"; fi
+    { wizard_file; echo "define('APP_BASE_URL', 'http://other.example/');"; } > "$DR_CFG"
+    if [ "$(dr_lines)" = 'note: APP_BASE_URL is neither as the wizard wrote it nor as base-url.sh leaves it (edited by hand?)' ]; then good "doctor.sh server checks: two defines of APP_BASE_URL are a note (edited by hand)"; else bad "doctor.sh server checks: file with two defines: $(dr_lines)"; fi
+    if env -i PATH="$PATH" bash "$WORK/doctor-remote.sh" "$LOCKED_SH" "" 0 2>&1 < /dev/null | grep -qE 'not-a-real|myproject|other\.example'; then bad "doctor.sh server checks: a value of the file reached the output"; else good "doctor.sh server checks: no value of the file (address, password) is in the output"; fi
+    rm -f "$DR_CFG"
+else
+    bad "doctor.sh: the text of the server checks was not captured, or has no app-config.php check: ${DR_SCRIPT:-none}"
 fi
 STACK_TEST_SSH_REPORT="$WORK/report" STACK_TEST_CURL_OUT=502 STACK_TEST_CURL_STATUS=0 sh_run doctor.sh
 if [ "$STATUS" -eq 3 ] && grep -q 'FAIL: GET .* answers 502' "$WORK/out"; then good "doctor.sh: a 502 from the application is a failure"; else bad "doctor.sh: a 502 was not counted (status $STATUS)"; fi

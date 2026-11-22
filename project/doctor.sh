@@ -4,9 +4,10 @@
 #        doctor.sh --guide    print the setup steps with the values of stack.conf (the same steps as README.md, condensed)
 # Checks: SSH login with the key; PHP and Composer versions; /app and /repo are mounted and writable; the stack variables
 # are present in the SSH session (their NAMES only, never their values); the database answers; locked.sh is on the server
-# (sync.sh puts it there); the authorized key file is not empty; the application name resolves from your machine; GET / answers
-# from your machine and from the tools container. When ai/ was rendered (INCLUDE_AI=1): whether AGENTS.md and CLAUDE.md at the
-# project root hold the test-instance section of ai/AGENTS-section.md (notes only, never a failure).
+# (sync.sh puts it there); whether APP_BASE_URL of /app is fixed or dynamic (base-url.sh), as a note, never a failure; the authorized
+# key file is not empty; the application name resolves from your machine; GET / answers from your machine and from the tools
+# container. When ai/ was rendered (INCLUDE_AI=1): whether AGENTS.md and CLAUDE.md at the project root hold the test-instance section
+# of ai/AGENTS-section.md (notes only, never a failure).
 # Values come from stack.conf, not from this file.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd -P)"
@@ -50,7 +51,7 @@ Run the local steps from the project root:   cd "$ROOT"
    Stack variables: load $DEST_DIR/portainer.env, then type the values of PERFEX_DB_HOST, PERFEX_DB_NAME, PERFEX_DB_USER, PERFEX_DB_PASSWORD (loaded empty).
 
 6. Your machine: $DEST_DIR/doctor.sh      then, if the application is not installed yet:  $DEST_DIR/install-perfex.sh <your Perfex folder or zip>
-   and open $APP_URL in the browser to finish the installation.
+   and open $APP_URL in the browser to finish the installation; behind a tunnel or an HTTPS proxy, after the wizard: $DEST_DIR/base-url.sh dynamic
 EOT
     exit 0
 fi
@@ -105,6 +106,17 @@ if [ -n "${PERFEX_DB_HOST:-}" ] && [ -n "${PERFEX_DB_USER:-}" ] && [ -n "${PERFE
     fi
 fi
 if [ -f "$locked" ]; then echo "ok: locked.sh is on the server ($locked)"; else echo "FAIL: locked.sh is not on the server: run sync.sh ($locked)"; fi
+# APP_BASE_URL in the configuration the installation wizard wrote (never a failure, and no value of the file is printed)
+cfg=/app/application/config/app-config.php
+if [ ! -f "$cfg" ]; then
+    echo "note: the application is not installed yet (no app-config.php in /app)"
+elif grep -qF '// perfex-crm-stack: dynamic APP_BASE_URL (base-url.sh), begin' "$cfg"; then
+    echo "note: APP_BASE_URL is dynamic (base-url.sh): the application trusts the Host header, test instance only"
+elif [ "$(grep -c "^define('APP_BASE_URL', " "$cfg")" = 1 ]; then
+    echo "ok: APP_BASE_URL is fixed"
+else
+    echo "note: APP_BASE_URL is neither as the wizard wrote it nor as base-url.sh leaves it (edited by hand?)"
+fi
 if [ -s /etc/ssh/authorized_keys.d/www-data ]; then
     echo "ok: authorized_keys holds $(grep -Ec '^(ssh-|ecdsa-|sk-)' /etc/ssh/authorized_keys.d/www-data) key line(s)"
 else
