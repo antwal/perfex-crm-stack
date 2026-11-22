@@ -686,13 +686,31 @@ else
     remote_bu fixed "$T1" "$DEFAULT_PHP"
     check "base-url.sh server, CRLF: fixed gives the file back byte for byte" sh -c "[ $RSTATUS -eq 0 ] && cmp -s '$WORK/bu-orig.php' '$BUCFG'"
 
-    # p. a file without a final newline (edited by hand, never written so by the wizard) is valid after the round trip; it gets a final newline, nothing else changes
+    # p. the file the wizard really writes has no newline at the end (the installer trims the text it writes: in CRLF the last line has
+    #    no CR either): the patched file has none either, and fixed gives the original back byte for byte
+    for kind in crlf lf; do
+        mk_cfg "$kind"
+        size="$(wc -c < "$BUCFG" | tr -d ' ')"; strip=1
+        if [ "$kind" = crlf ]; then strip=2; fi
+        head -c $((size - strip)) "$BUCFG" > "$BUCFG.cut" && cat "$BUCFG.cut" > "$BUCFG" && rm -f "$BUCFG.cut"
+        cp -p "$BUCFG" "$WORK/bu-orig.php"
+        remote_bu dynamic "$T1" "$DEFAULT_PHP"
+        check "base-url.sh server, $kind without a newline at the end (as the wizard writes it): dynamic succeeds and the patched file has none either" \
+            sh -c "[ $RSTATUS -eq 0 ] && [ -n \"\$(tail -c 1 '$BUCFG')\" ] && [ -z \"\$(find '$BUDIR' -name 'app-config.php.*')\" ] && [ \"\$(ls -l '$BUCFG' | cut -c1-10)\" = '-rw-r-----' ]"
+        if command -v php > /dev/null 2>&1; then
+            PATH="$PATH" php -l "$BUCFG" > "$WORK/rout" 2>&1; RSTATUS=$?
+            check "base-url.sh server, $kind without a newline at the end, real php: the patched file passes php -l" test "$RSTATUS" -eq 0
+        fi
+        remote_bu fixed "$T1" "$DEFAULT_PHP"
+        check "base-url.sh server, $kind without a newline at the end: fixed gives the file back byte for byte" sh -c "[ $RSTATUS -eq 0 ] && cmp -s '$WORK/bu-orig.php' '$BUCFG'"
+    done
+    # q. the define is the very last line of such a file
     mk_cfg lf
-    size="$(wc -c < "$BUCFG" | tr -d ' ')"; head -c $((size - 1)) "$BUCFG" > "$BUCFG.cut" && mv "$BUCFG.cut" "$BUCFG"; chmod 640 "$BUCFG"; cp -p "$BUCFG" "$WORK/bu-orig.php"
+    { printf '%s\n' '<?php' "define('APP_ENC_KEY', 'not-a-real-key');"; printf '%s' "define('APP_BASE_URL', '$BU_URL');"; } > "$BUCFG"
+    chmod 640 "$BUCFG"; cp -p "$BUCFG" "$WORK/bu-orig.php"
     remote_bu dynamic "$T1" "$DEFAULT_PHP"; first="$RSTATUS"
     remote_bu fixed "$T1" "$DEFAULT_PHP"
-    { cat "$WORK/bu-orig.php"; echo; } > "$WORK/bu-expect.php"
-    check "base-url.sh server: a file without a final newline goes dynamic and back, and differs from the original by that newline alone" sh -c "[ $first -eq 0 ] && [ $RSTATUS -eq 0 ] && cmp -s '$WORK/bu-expect.php' '$BUCFG'"
+    check "base-url.sh server: the define as the last line of a file without a newline goes dynamic and back, byte for byte" sh -c "[ $first -eq 0 ] && [ $RSTATUS -eq 0 ] && cmp -s '$WORK/bu-orig.php' '$BUCFG'"
 fi
 
 # ---- examples/extra ------------------------------------------------------------------------------------------------------------------

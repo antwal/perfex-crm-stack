@@ -109,7 +109,7 @@ esac
 # The copy comes first; the new text is built next to the file, checked with php -l, and moved over it only then (the owner and
 # the mode stay). Whatever happens, the working files are removed on exit: a copy of the credentials never stays behind.
 tmp="$cfg.base-url.tmp"; blk="$cfg.base-url.block"
-trap 'rm -f "$tmp" "$blk" "$blk.2"' EXIT
+trap 'rm -f "$tmp" "$tmp.2" "$blk" "$blk.2"' EXIT
 if [ "$action" = dynamic ]; then cp -p "$cfg" "$bak"; fi
 cp -p "$cfg" "$tmp"
 if [ "$action" = dynamic ]; then
@@ -135,6 +135,14 @@ PHP
     awk 'FNR == NR { blk = blk $0 "\n"; next } /^define\(.APP_BASE_URL., / { print "// " $0; printf "%s", blk; next } { print }' "$blk.2" "$cfg" > "$tmp"
 else
     awk -v b="$begin" -v e="$end" '{ l = $0; sub(/\r$/, "", l) } l == b { skip = 1; next } l == e { skip = 0; next } skip { next } l ~ /^\/\/ define\(.APP_BASE_URL., / { sub(/^\/\/ /, ""); print; next } { print }' "$cfg" > "$tmp"
+fi
+# awk ends its last line with a newline. The wizard trims the text it writes, so its file has no newline at the end (and no CR on
+# the last line): when the file has none, the new text gets none either, and "fixed" still gives the file back byte for byte.
+# The last byte is cut through a second working file and written back into the first, which keeps its owner and its mode.
+if [ -n "$(tail -c 1 "$cfg")" ]; then
+    size="$(wc -c < "$tmp" | tr -d ' ')"
+    head -c "$((size - 1))" "$tmp" > "$tmp.2"
+    cat "$tmp.2" > "$tmp"
 fi
 if ! PATH="/opt/php/$php:$PATH" php -l "$tmp" > /dev/null 2>&1 < /dev/null; then
     fail "the new app-config.php does not pass php -l: the file was not changed"

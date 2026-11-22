@@ -15,7 +15,8 @@ of the scripts you write yourself: they keep their names and arguments until the
   (`X-Forwarded-Proto`, `HTTPS`, port 443) and the host (`X-Forwarded-Host`, else `Host`) from the request; `fixed` removes the
   block and uncomments the line; `status` says which of the two the file is in and changes nothing. A copy of the file is kept in
   `/repo/.app-config-<target>.php.bak` first, the new file is checked with `php -l` before it replaces the old one, the owner,
-  the mode and the line endings are kept (the file the wizard writes is CRLF), and only the `APP_BASE_URL` line is read or
+  the mode and the line endings are kept (the file the wizard writes is CRLF, and has no newline at the end: the installer trims
+  the text it writes; `fixed` gives it back byte for byte), and only the `APP_BASE_URL` line is read or
   printed: the file holds the credentials of the instance. A file edited by hand, or an address that is not in the shape the
   wizard writes, is refused. **Test instance only:** the application then trusts the `Host` header of every request; the script
   and the READMEs say so. The generated README has the same block to paste by hand.
@@ -24,7 +25,7 @@ of the scripts you write yourself: they keep their names and arguments until the
 - The AI section (`ai/AGENTS-section.md`, `ai/memory-note.md`, prompt B) lists `base-url.sh`: `dynamic` and `fixed` change a file
   of the instance, so an agent runs them only when the owner asks; `status` is always fine.
 - Tests. `scripts-test.sh` runs the very script that `base-url.sh` sends to the server against a folder tree, with a file in LF
-  and the same file in CRLF: the round trip gives the original back byte for byte (a file with no final newline gets one), a value that could carry code, two defines, a
+  and the same file in CRLF, each with and without a newline at the end (the wizard's has none): the round trip gives the original back byte for byte, a value that could carry code, two defines, a
   path in the address, a missing file or a symbolic link, a failing `php -l` and a file edited by hand are refused with the file
   untouched, hostile parameters are refused on the server too. With the real `php` of the machine, when there is one, the patched
   file loads and the block gives the right address for each kind of request. It also runs the checks that `doctor.sh` sends to the
